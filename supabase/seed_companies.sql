@@ -1,0 +1,62 @@
+-- Seed known public Greenhouse + Lever boards (verified via public ATS APIs).
+-- Idempotent: unique (ats_source, board_slug).
+
+insert into public.companies (ats_source, board_slug, company_name, is_active)
+values
+  -- Greenhouse
+  ('greenhouse', 'stripe', 'Stripe', true),
+  ('greenhouse', 'gitlab', 'GitLab', true),
+  ('greenhouse', 'discord', 'Discord', true),
+  ('greenhouse', 'airbnb', 'Airbnb', true),
+  ('greenhouse', 'anthropic', 'Anthropic', true),
+  ('greenhouse', 'cloudflare', 'Cloudflare', true),
+  ('greenhouse', 'datadog', 'Datadog', true),
+  ('greenhouse', 'figma', 'Figma', true),
+  ('greenhouse', 'coinbase', 'Coinbase', true),
+  ('greenhouse', 'block', 'Block', true),
+  ('greenhouse', 'lyft', 'Lyft', true),
+  ('greenhouse', 'pinterest', 'Pinterest', true),
+  ('greenhouse', 'reddit', 'Reddit', true),
+  ('greenhouse', 'dropbox', 'Dropbox', true),
+  ('greenhouse', 'twilio', 'Twilio', true),
+  ('greenhouse', 'robinhood', 'Robinhood', true),
+  ('greenhouse', 'asana', 'Asana', true),
+  ('greenhouse', 'vercel', 'Vercel', true),
+  ('greenhouse', 'hubspot', 'HubSpot', true),
+  ('greenhouse', 'okta', 'Okta', true),
+  ('greenhouse', 'mongodb', 'MongoDB', true),
+  ('greenhouse', 'elastic', 'Elastic', true),
+  ('greenhouse', 'brex', 'Brex', true),
+  ('greenhouse', 'duolingo', 'Duolingo', true),
+  ('greenhouse', 'affirm', 'Affirm', true),
+  ('greenhouse', 'chime', 'Chime', true),
+  ('greenhouse', 'gusto', 'Gusto', true),
+  ('greenhouse', 'lattice', 'Lattice', true),
+  ('greenhouse', 'mixpanel', 'Mixpanel', true),
+  ('greenhouse', 'amplitude', 'Amplitude', true),
+  ('greenhouse', 'braze', 'Braze', true),
+  ('greenhouse', 'cockroachlabs', 'Cockroach Labs', true),
+  ('greenhouse', 'netlify', 'Netlify', true),
+  ('greenhouse', 'webflow', 'Webflow', true),
+  ('greenhouse', 'airtable', 'Airtable', true),
+  ('greenhouse', 'postman', 'Postman', true),
+  ('greenhouse', 'intercom', 'Intercom', true),
+  -- Lever
+  ('lever', 'spotify', 'Spotify', true),
+  ('lever', 'palantir', 'Palantir', true),
+  ('lever', 'activecampaign', 'ActiveCampaign', true),
+  ('lever', 'wealthfront', 'Wealthfront', true),
+  ('lever', 'outreach', 'Outreach', true),
+  ('lever', 'unlimit', 'Unlimit', true),
+  ('lever', 'aledade', 'Aledade', true),
+  ('lever', 'achievers', 'Achievers', true),
+  ('lever', 'acceldata', 'Acceldata', true),
+  ('lever', 'anomali', 'Anomali', true),
+  ('lever', 'brightmachines', 'Bright Machines', true),
+  ('lever', 'coupa', 'Coupa', true),
+  ('lever', 'hermeus', 'Hermeus', true)
+on conflict (ats_source, board_slug) do update
+set
+  company_name = excluded.company_name,
+  is_active = true,
+  consecutive_failures = 0;
