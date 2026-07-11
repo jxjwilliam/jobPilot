@@ -1,28 +1,27 @@
 import { z } from "zod";
 
+const ExperienceItemSchema = z.object({
+  title: z.coerce.string().default(""),
+  company: z.coerce.string().default(""),
+  start: z.coerce.string().optional(),
+  end: z.coerce.string().optional(),
+  bullets: z
+    .array(z.coerce.string())
+    .default([])
+    .transform((items) => items.map((b) => b.trim()).filter(Boolean)),
+});
+
+const EducationItemSchema = z.object({
+  school: z.coerce.string().default(""),
+  degree: z.coerce.string().optional(),
+  year: z.coerce.string().optional(),
+});
+
 export const ParsedResumeSchema = z.object({
-  summary: z.string().default(""),
-  skills: z.array(z.string()).default([]),
-  experience: z
-    .array(
-      z.object({
-        title: z.string(),
-        company: z.string(),
-        start: z.string().optional(),
-        end: z.string().optional(),
-        bullets: z.array(z.string()).default([]),
-      })
-    )
-    .default([]),
-  education: z
-    .array(
-      z.object({
-        school: z.string(),
-        degree: z.string().optional(),
-        year: z.string().optional(),
-      })
-    )
-    .default([]),
+  summary: z.coerce.string().default(""),
+  skills: z.array(z.coerce.string()).default([]),
+  experience: z.array(ExperienceItemSchema).default([]),
+  education: z.array(EducationItemSchema).default([]),
 });
 
 export const ScoreResultSchema = z.object({

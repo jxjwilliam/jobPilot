@@ -1,7 +1,9 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { JobPilotLogo } from "@/components/brand/JobPilotLogo";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -36,7 +38,10 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-8">
       <div className="w-full max-w-sm">
-        <h1 className="text-2xl font-semibold tracking-tight">Sign in</h1>
+        <Link href="/" className="inline-flex">
+          <JobPilotLogo />
+        </Link>
+        <h1 className="mt-8 text-2xl font-semibold tracking-tight">Sign in</h1>
         <p className="mt-2 text-sm text-neutral-600">
           Enter your email and we&apos;ll send a magic link.
         </p>

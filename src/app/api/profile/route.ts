@@ -74,7 +74,10 @@ export async function PUT(request: Request) {
     const parsed = ParsedResumeSchema.safeParse(record.resume_parsed);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "Invalid resume_parsed", details: parsed.error.flatten() },
+        {
+          error: "Invalid resume data — check experience/education fields",
+          details: parsed.error.flatten(),
+        },
         { status: 400 }
       );
     }
@@ -85,7 +88,10 @@ export async function PUT(request: Request) {
     const prefs = PreferencesSchema.safeParse(record.preferences);
     if (!prefs.success) {
       return NextResponse.json(
-        { error: "Invalid preferences", details: prefs.error.flatten() },
+        {
+          error: "Invalid preferences — check salary and list fields",
+          details: prefs.error.flatten(),
+        },
         { status: 400 }
       );
     }
@@ -103,12 +109,19 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  if (!data) {
+    return NextResponse.json(
+      { error: "Profile not found or not writable for this user" },
+      { status: 404 }
+    );
+  }
+
   return NextResponse.json({
-    resume_parsed: ParsedResumeSchema.parse(data?.resume_parsed ?? {}),
+    resume_parsed: ParsedResumeSchema.parse(data.resume_parsed ?? {}),
     preferences: PreferencesSchema.parse(
-      data?.preferences ?? emptyPreferences()
+      data.preferences ?? emptyPreferences()
     ),
-    resume_raw_url: data?.resume_raw_url ?? null,
-    updated_at: data?.updated_at ?? null,
+    resume_raw_url: data.resume_raw_url ?? null,
+    updated_at: data.updated_at ?? null,
   });
 }

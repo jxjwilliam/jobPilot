@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { JobPilotLogo } from "@/components/brand/JobPilotLogo";
 
 const links = [
   { href: "/matches", label: "Matches" },
@@ -11,8 +12,8 @@ export function AppNav() {
   return (
     <header className="border-b border-neutral-200">
       <div className="mx-auto flex max-w-5xl items-center justify-between gap-6 px-4 py-3">
-        <Link href="/matches" className="text-sm font-semibold tracking-tight">
-          JobPilot
+        <Link href="/matches" className="hover:opacity-90">
+          <JobPilotLogo />
         </Link>
         <nav className="flex flex-wrap items-center gap-4 text-sm text-neutral-600">
           {links.map((link) => (

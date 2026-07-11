@@ -22,16 +22,30 @@ export async function saveProfile(payload: {
   resume_parsed?: ParsedResume;
   preferences?: Preferences;
 }): Promise<ProfilePayload> {
+  // Commit any focused CSV draft inputs before reading React state.
+  if (typeof document !== "undefined") {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement) active.blur();
+    await new Promise((r) => setTimeout(r, 0));
+  }
+
   const res = await fetch("/api/profile", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+  const body = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    details?: unknown;
+  } & Partial<ProfilePayload>;
   if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(body.error ?? "Failed to save profile");
+    const detail =
+      body.details && typeof body.details === "object"
+        ? ` (${JSON.stringify(body.details).slice(0, 200)})`
+        : "";
+    throw new Error((body.error ?? "Failed to save profile") + detail);
   }
-  return res.json() as Promise<ProfilePayload>;
+  return body as ProfilePayload;
 }
 
 export async function uploadResume(file: File): Promise<

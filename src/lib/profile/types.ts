@@ -5,11 +5,17 @@ import {
 } from "@/lib/llm/schemas";
 
 export const PreferencesSchema = z.object({
-  roles: z.array(z.string()).default([]),
-  locations: z.array(z.string()).default([]),
-  remote_pref: z.string().default(""),
-  salary_floor: z.number().nullable().default(null),
-  excluded_industries: z.array(z.string()).default([]),
+  roles: z.array(z.coerce.string()).default([]),
+  locations: z.array(z.coerce.string()).default([]),
+  remote_pref: z.coerce.string().default(""),
+  salary_floor: z
+    .union([z.number(), z.string(), z.null(), z.undefined()])
+    .transform((v) => {
+      if (v == null || v === "") return null;
+      const n = typeof v === "number" ? v : Number(v);
+      return Number.isFinite(n) ? n : null;
+    }),
+  excluded_industries: z.array(z.coerce.string()).default([]),
 });
 
 export type Preferences = z.infer<typeof PreferencesSchema>;
