@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type MatchedPosting = {
@@ -28,40 +28,75 @@ function rationaleSnippet(text: string, max = 160): string {
 export default function MatchesPage() {
   const router = useRouter();
   const [postings, setPostings] = useState<MatchedPosting[]>([]);
-  const [minScore, setMinScore] = useState(70);
+  const [minScore, setMinScore] = useState(50);
   const [loading, setLoading] = useState(true);
+  const [scoring, setScoring] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
   const [tailoringId, setTailoringId] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await fetch(`/api/postings?min_score=${minScore}`);
-        const data = (await res.json()) as {
-          postings?: MatchedPosting[];
-          error?: string;
-        };
-        if (!res.ok) {
-          throw new Error(data.error ?? "Failed to load matches");
-        }
-        if (!cancelled) {
-          setPostings(data.postings ?? []);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load");
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
+  const loadMatches = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/postings?min_score=${minScore}`);
+      const data = (await res.json()) as {
+        postings?: MatchedPosting[];
+        error?: string;
+      };
+      if (!res.ok) {
+        throw new Error(data.error ?? "Failed to load matches");
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
+      setPostings(data.postings ?? []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load");
+    } finally {
+      setLoading(false);
+    }
   }, [minScore]);
+
+  useEffect(() => {
+    void loadMatches();
+  }, [loadMatches]);
+
+  async function handleScoreNow() {
+    setScoring(true);
+    setError(null);
+    setStatus(null);
+    try {
+      const res = await fetch("/api/score/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ limit: 20 }),
+      });
+      const data = (await res.json()) as {
+        scored?: number;
+        attempted?: number;
+        errors?: number;
+        remaining_unscored_estimate?: number;
+        error?: string;
+        error_samples?: string[];
+      };
+      if (!res.ok) {
+        throw new Error(data.error ?? "Scoring failed");
+      }
+      setStatus(
+        `Scored ${data.scored ?? 0} of ${data.attempted ?? 0} jobs` +
+          (data.errors ? ` (${data.errors} errors)` : "") +
+          (data.remaining_unscored_estimate
+            ? `. ~${data.remaining_unscored_estimate} still unscored — run again to continue.`
+            : ".")
+      );
+      if (data.error_samples?.length) {
+        setError(data.error_samples.join(" · "));
+      }
+      await loadMatches();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Scoring failed");
+    } finally {
+      setScoring(false);
+    }
+  }
 
   async function handleTailor(postingId: string) {
     setTailoringId(postingId);
@@ -92,24 +127,43 @@ export default function MatchesPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Matches</h1>
           <p className="mt-1 text-sm text-neutral-600">
-            Scored postings that fit your profile.
+            Jobs scored against your resume. Run scoring to populate this list.
           </p>
         </div>
-        <label className="flex items-center gap-2 text-sm text-neutral-700">
-          Min score
-          <select
-            className="rounded border border-neutral-300 px-2 py-1"
-            value={minScore}
-            onChange={(e) => setMinScore(Number(e.target.value))}
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-sm text-neutral-700">
+            Min score
+            <select
+              className="rounded border border-neutral-300 px-2 py-1"
+              value={minScore}
+              onChange={(e) => setMinScore(Number(e.target.value))}
+            >
+              {[40, 50, 60, 70, 80, 90].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            disabled={scoring || loading}
+            onClick={() => void handleScoreNow()}
+            className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-60"
           >
-            {[50, 60, 70, 80, 90].map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
-        </label>
+            {scoring ? "Scoring…" : "Score matches now"}
+          </button>
+        </div>
       </div>
+
+      {status ? (
+        <p
+          className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900"
+          role="status"
+        >
+          {status}
+        </p>
+      ) : null}
 
       {error ? (
         <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
@@ -132,24 +186,27 @@ export default function MatchesPage() {
       ) : postings.length === 0 ? (
         <div className="space-y-3 rounded border border-dashed border-neutral-300 bg-neutral-50 px-4 py-6">
           <p className="text-sm text-neutral-700">
-            No matches at score ≥ {minScore} yet.
+            No scored matches at ≥ {minScore} yet.
           </p>
           <p className="text-sm text-neutral-600">
-            Finish onboarding so we can score roles against your profile, then
-            wait for the scoring job to run (or lower the min score).
+            Job postings are already ingested. Click{" "}
+            <strong>Score matches now</strong> to rank them against your
+            profile (uses your LLM). Or lower the min score after scoring.
           </p>
           <div className="flex flex-wrap gap-3 pt-1">
+            <button
+              type="button"
+              disabled={scoring}
+              onClick={() => void handleScoreNow()}
+              className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-60"
+            >
+              {scoring ? "Scoring…" : "Score matches now"}
+            </button>
             <Link
               href="/onboarding"
-              className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800"
-            >
-              Complete profile
-            </Link>
-            <Link
-              href="/profile"
               className="rounded border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-800 hover:bg-neutral-50"
             >
-              Edit preferences
+              Check profile
             </Link>
           </div>
         </div>
@@ -157,7 +214,7 @@ export default function MatchesPage() {
         <ul className="divide-y divide-neutral-200 border-t border-neutral-200">
           {postings.map((posting) => (
             <li
-              key={posting.id}
+              key={posting.posting_id}
               className="flex flex-col gap-3 py-5 sm:flex-row sm:items-start sm:justify-between"
             >
               <div className="min-w-0 flex-1 space-y-1">
@@ -179,11 +236,13 @@ export default function MatchesPage() {
               </div>
               <button
                 type="button"
-                disabled={tailoringId === posting.id}
-                onClick={() => handleTailor(posting.id)}
+                disabled={tailoringId === posting.posting_id}
+                onClick={() => handleTailor(posting.posting_id)}
                 className="shrink-0 rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-60"
               >
-                {tailoringId === posting.id ? "Starting…" : "Tailor"}
+                {tailoringId === posting.posting_id
+                  ? "Starting…"
+                  : "Tailor"}
               </button>
             </li>
           ))}

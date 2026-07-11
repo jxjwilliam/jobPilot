@@ -1,7 +1,7 @@
 "use client";
 
 import type { Preferences } from "@/lib/profile/types";
-import { csvToList, listToCsv } from "@/components/profile/api";
+import { CsvListInput } from "@/components/profile/CsvListInput";
 
 type Props = {
   value: Preferences;
@@ -11,29 +11,19 @@ type Props = {
 export function PreferencesEditor({ value, onChange }: Props) {
   return (
     <div className="space-y-4">
-      <label className="block text-sm font-medium">
-        Target roles (comma-separated)
-        <input
-          className="mt-1 w-full rounded-md border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900"
-          value={listToCsv(value.roles)}
-          onChange={(e) =>
-            onChange({ ...value, roles: csvToList(e.target.value) })
-          }
-          placeholder="Software Engineer, Backend Engineer"
-        />
-      </label>
+      <CsvListInput
+        label="Target roles (comma-separated)"
+        value={value.roles}
+        onChange={(roles) => onChange({ ...value, roles })}
+        placeholder="Software Engineer, Backend Engineer"
+      />
 
-      <label className="block text-sm font-medium">
-        Locations (comma-separated)
-        <input
-          className="mt-1 w-full rounded-md border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900"
-          value={listToCsv(value.locations)}
-          onChange={(e) =>
-            onChange({ ...value, locations: csvToList(e.target.value) })
-          }
-          placeholder="San Francisco, Remote"
-        />
-      </label>
+      <CsvListInput
+        label="Locations (comma-separated)"
+        value={value.locations}
+        onChange={(locations) => onChange({ ...value, locations })}
+        placeholder="San Francisco, Remote"
+      />
 
       <label className="block text-sm font-medium">
         Remote preference
@@ -70,20 +60,14 @@ export function PreferencesEditor({ value, onChange }: Props) {
         />
       </label>
 
-      <label className="block text-sm font-medium">
-        Excluded industries (comma-separated)
-        <input
-          className="mt-1 w-full rounded-md border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900"
-          value={listToCsv(value.excluded_industries)}
-          onChange={(e) =>
-            onChange({
-              ...value,
-              excluded_industries: csvToList(e.target.value),
-            })
-          }
-          placeholder="Gambling, Tobacco"
-        />
-      </label>
+      <CsvListInput
+        label="Excluded industries (comma-separated)"
+        value={value.excluded_industries}
+        onChange={(excluded_industries) =>
+          onChange({ ...value, excluded_industries })
+        }
+        placeholder="Gambling, Tobacco"
+      />
     </div>
   );
 }

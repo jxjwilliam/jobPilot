@@ -1,7 +1,7 @@
 "use client";
 
 import type { ParsedResume } from "@/lib/llm/schemas";
-import { csvToList, listToCsv } from "@/components/profile/api";
+import { CsvListInput } from "@/components/profile/CsvListInput";
 
 type Props = {
   value: ParsedResume;
@@ -21,16 +21,12 @@ export function ResumeFieldsEditor({ value, onChange }: Props) {
         />
       </label>
 
-      <label className="block text-sm font-medium">
-        Skills (comma-separated)
-        <input
-          className="mt-1 w-full rounded-md border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900"
-          value={listToCsv(value.skills)}
-          onChange={(e) =>
-            onChange({ ...value, skills: csvToList(e.target.value) })
-          }
-        />
-      </label>
+      <CsvListInput
+        label="Skills (comma-separated)"
+        value={value.skills}
+        onChange={(skills) => onChange({ ...value, skills })}
+        placeholder="TypeScript, React, PostgreSQL"
+      />
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">
@@ -109,6 +105,14 @@ export function ResumeFieldsEditor({ value, onChange }: Props) {
               className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900"
               value={(exp.bullets ?? []).join("\n")}
               onChange={(e) => {
+                const experience = [...value.experience];
+                experience[index] = {
+                  ...exp,
+                  bullets: e.target.value.split("\n"),
+                };
+                onChange({ ...value, experience });
+              }}
+              onBlur={(e) => {
                 const experience = [...value.experience];
                 experience[index] = {
                   ...exp,

@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getLlmClient, getLlmModel } from "@/lib/llm/client";
+import { getCompletionText } from "@/lib/llm/message-text";
 import {
   ParsedResumeSchema,
   ScoreResultSchema,
@@ -138,6 +139,7 @@ export async function scorePair(
   const completion = await client.chat.completions.create({
     model: getLlmModel(),
     temperature: 0.2,
+    response_format: { type: "json_object" },
     messages: [
       {
         role: "system",
@@ -151,7 +153,7 @@ export async function scorePair(
     ],
   });
 
-  const content = completion.choices[0]?.message?.content ?? "";
+  const content = getCompletionText(completion);
   const result = extractScoreResult(content);
 
   const { error } = await adminClient.from("scores").upsert(

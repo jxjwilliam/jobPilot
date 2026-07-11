@@ -6,6 +6,7 @@ import {
   incrementTailoring,
 } from "@/lib/billing/quota";
 import { getLlmClient, getLlmModel } from "@/lib/llm/client";
+import { getCompletionText } from "@/lib/llm/message-text";
 import {
   ParsedResumeSchema,
   TailorResultSchema,
@@ -216,7 +217,7 @@ async function runTailorLlm(input: BuildTailorPromptInput): Promise<TailorResult
     ],
   });
 
-  const content = completion.choices[0]?.message?.content ?? "";
+  const content = getCompletionText(completion);
   return extractTailorResult(content);
 }
 
