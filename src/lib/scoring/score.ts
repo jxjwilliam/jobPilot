@@ -79,6 +79,64 @@ export function filterByMinScore<T extends { score: number }>(
   return rows.filter((row) => row.score >= minScore);
 }
 
+const NOISE_TITLE =
+  /\b(welder|technician|machinist|inventory|propulsion|avionics|aerodynamics|gnc|flight software|manufacturing|structures|mechanisms|rf systems|mission manager|finance analyst)\b/i;
+
+/**
+ * Rank postings for scoring so we don't burn LLM calls on unrelated newest jobs
+ * (e.g. aerospace welders when the profile is a software engineer).
+ */
+export function rankPostingsForProfile(
+  postings: ScorePosting[],
+  resume: ParsedResume,
+  preferences: Preferences
+): ScorePosting[] {
+  const roleTokens = preferences.roles
+    .flatMap((r) => r.toLowerCase().split(/[^a-z0-9+#.]+/))
+    .filter((t) => t.length > 2);
+  const skillTokens = resume.skills
+    .slice(0, 40)
+    .map((s) => s.toLowerCase())
+    .filter((s) => s.length > 1);
+  const preferRemote = /remote|any/i.test(preferences.remote_pref || "");
+
+  const scored = postings.map((posting) => {
+    const hay = `${posting.title} ${posting.location ?? ""} ${posting.description_raw.slice(0, 1500)}`.toLowerCase();
+    let relevance = 0;
+
+    if (NOISE_TITLE.test(posting.title)) relevance -= 40;
+
+    for (const token of roleTokens) {
+      if (hay.includes(token)) relevance += 8;
+    }
+    for (const token of [
+      "software",
+      "full-stack",
+      "fullstack",
+      "backend",
+      "frontend",
+      "platform",
+      "typescript",
+      "react",
+      "python",
+      "machine learning",
+      "ml engineer",
+      "ai engineer",
+    ]) {
+      if (hay.includes(token)) relevance += 5;
+    }
+    for (const skill of skillTokens.slice(0, 20)) {
+      if (skill.length >= 3 && hay.includes(skill)) relevance += 2;
+    }
+    if (preferRemote && /remote/i.test(posting.location ?? "")) relevance += 6;
+
+    return { posting, relevance };
+  });
+
+  scored.sort((a, b) => b.relevance - a.relevance);
+  return scored.map((s) => s.posting);
+}
+
 export function extractScoreResult(text: string): ScoreResult {
   const trimmed = text.trim();
   const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);

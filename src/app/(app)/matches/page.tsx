@@ -28,26 +28,34 @@ function rationaleSnippet(text: string, max = 160): string {
 export default function MatchesPage() {
   const router = useRouter();
   const [postings, setPostings] = useState<MatchedPosting[]>([]);
-  const [minScore, setMinScore] = useState(50);
+  const [minScore, setMinScore] = useState(40);
   const [loading, setLoading] = useState(true);
   const [scoring, setScoring] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [tailoringId, setTailoringId] = useState<string | null>(null);
+  const [belowMinCount, setBelowMinCount] = useState(0);
 
   const loadMatches = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/postings?min_score=${minScore}`);
+      const [res, allRes] = await Promise.all([
+        fetch(`/api/postings?min_score=${minScore}`),
+        fetch(`/api/postings?min_score=0`),
+      ]);
       const data = (await res.json()) as {
         postings?: MatchedPosting[];
         error?: string;
       };
+      const allData = (await allRes.json()) as { postings?: MatchedPosting[] };
       if (!res.ok) {
         throw new Error(data.error ?? "Failed to load matches");
       }
-      setPostings(data.postings ?? []);
+      const list = data.postings ?? [];
+      setPostings(list);
+      const all = allData.postings ?? [];
+      setBelowMinCount(Math.max(0, all.length - list.length));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load");
     } finally {
@@ -76,16 +84,20 @@ export default function MatchesPage() {
         remaining_unscored_estimate?: number;
         error?: string;
         error_samples?: string[];
+        totals?: { scores?: number; scores_gte_50?: number };
       };
       if (!res.ok) {
         throw new Error(data.error ?? "Scoring failed");
       }
       setStatus(
-        `Scored ${data.scored ?? 0} of ${data.attempted ?? 0} jobs` +
+        `Scored ${data.scored ?? 0} of ${data.attempted ?? 0} role-matched jobs` +
           (data.errors ? ` (${data.errors} errors)` : "") +
+          (data.totals?.scores_gte_50 != null
+            ? `. ${data.totals.scores_gte_50} total at score ≥ 50.`
+            : ".") +
           (data.remaining_unscored_estimate
-            ? `. ~${data.remaining_unscored_estimate} still unscored — run again to continue.`
-            : ".")
+            ? ` ~${data.remaining_unscored_estimate} still unscored — run again to continue.`
+            : "")
       );
       if (data.error_samples?.length) {
         setError(data.error_samples.join(" · "));
@@ -186,13 +198,22 @@ export default function MatchesPage() {
       ) : postings.length === 0 ? (
         <div className="space-y-3 rounded border border-dashed border-neutral-300 bg-neutral-50 px-4 py-6">
           <p className="text-sm text-neutral-700">
-            No scored matches at ≥ {minScore} yet.
+            No matches at score ≥ {minScore} yet.
           </p>
-          <p className="text-sm text-neutral-600">
-            Job postings are already ingested. Click{" "}
-            <strong>Score matches now</strong> to rank them against your
-            profile (uses your LLM). Or lower the min score after scoring.
-          </p>
+          {belowMinCount > 0 ? (
+            <p className="text-sm text-neutral-600">
+              You have {belowMinCount} scored job{belowMinCount === 1 ? "" : "s"}{" "}
+              below this threshold (often unrelated newest postings). Lower min
+              score, or click <strong>Score matches now</strong> to score
+              role-matched software jobs next.
+            </p>
+          ) : (
+            <p className="text-sm text-neutral-600">
+              Click <strong>Score matches now</strong> — scoring prioritizes
+              titles matching your profile (software / full-stack / ML), not
+              just the newest boards.
+            </p>
+          )}
           <div className="flex flex-wrap gap-3 pt-1">
             <button
               type="button"
@@ -202,8 +223,15 @@ export default function MatchesPage() {
             >
               {scoring ? "Scoring…" : "Score matches now"}
             </button>
+            <button
+              type="button"
+              onClick={() => setMinScore(0)}
+              className="rounded border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-800 hover:bg-neutral-50"
+            >
+              Show all scored (min 0)
+            </button>
             <Link
-              href="/onboarding"
+              href="/profile"
               className="rounded border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-800 hover:bg-neutral-50"
             >
               Check profile

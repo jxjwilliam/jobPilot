@@ -3,14 +3,16 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   DEFAULT_SCORE_BATCH_LIMIT,
+  rankPostingsForProfile,
   scorePair,
   type ScorePosting,
   type ScoreProfile,
 } from "@/lib/scoring/score";
 import { ParsedResumeSchema } from "@/lib/llm/schemas";
+import { PreferencesSchema } from "@/lib/profile/types";
 
 /**
- * Score the current user's profile against recent active postings.
+ * Score the current user's profile against relevant active postings.
  * Auth required (unlike the cron route).
  */
 export async function POST(request: Request) {
@@ -48,14 +50,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Profile not found" }, { status: 404 });
   }
 
-  const resume = ParsedResumeSchema.safeParse(profile.resume_parsed ?? {});
+  const resumeParsed = ParsedResumeSchema.safeParse(profile.resume_parsed ?? {});
+  const preferences = PreferencesSchema.parse(profile.preferences ?? {});
   const populated =
-    resume.success &&
-    (resume.data.summary.trim().length > 0 ||
-      resume.data.skills.length > 0 ||
-      resume.data.experience.length > 0);
+    resumeParsed.success &&
+    (resumeParsed.data.summary.trim().length > 0 ||
+      resumeParsed.data.skills.length > 0 ||
+      resumeParsed.data.experience.length > 0);
 
-  if (!populated) {
+  if (!populated || !resumeParsed.success) {
     return NextResponse.json(
       {
         error:
@@ -67,6 +70,7 @@ export async function POST(request: Request) {
 
   const admin = createAdminClient();
 
+  // Pull a wider pool, then rank by role/skill relevance (not just newest boards).
   const { data: postings, error: postingsError } = await admin
     .from("postings")
     .select(
@@ -74,26 +78,30 @@ export async function POST(request: Request) {
     )
     .eq("is_active", true)
     .order("last_seen_at", { ascending: false })
-    .limit(400);
+    .limit(1200);
 
   if (postingsError) {
     return NextResponse.json({ error: postingsError.message }, { status: 500 });
   }
 
   const activePostings = (postings ?? []) as ScorePosting[];
+  const ranked = rankPostingsForProfile(
+    activePostings,
+    resumeParsed.data,
+    preferences
+  );
+
   const { data: existingScores } = await admin
     .from("scores")
     .select("posting_id")
     .eq("profile_id", profile.id)
     .in(
       "posting_id",
-      activePostings.map((p) => p.id)
+      ranked.slice(0, 500).map((p) => p.id)
     );
 
   const scored = new Set((existingScores ?? []).map((s) => s.posting_id));
-  const pending = activePostings
-    .filter((p) => !scored.has(p.id))
-    .slice(0, limit);
+  const pending = ranked.filter((p) => !scored.has(p.id)).slice(0, limit);
 
   const scoreProfile: ScoreProfile = {
     id: profile.id,
@@ -119,15 +127,27 @@ export async function POST(request: Request) {
     }
   }
 
+  const { count: totalScores } = await admin
+    .from("scores")
+    .select("id", { count: "exact", head: true })
+    .eq("profile_id", profile.id);
+
+  const { count: above50 } = await admin
+    .from("scores")
+    .select("id", { count: "exact", head: true })
+    .eq("profile_id", profile.id)
+    .gte("score", 50);
+
   return NextResponse.json({
     attempted: pending.length,
     scored: scoredCount,
     errors,
     error_samples: errorSamples,
     limit: limit || DEFAULT_SCORE_BATCH_LIMIT,
-    remaining_unscored_estimate: Math.max(
-      0,
-      activePostings.length - scored.size - scoredCount
-    ),
+    remaining_unscored_estimate: Math.max(0, ranked.length - scored.size - scoredCount),
+    totals: {
+      scores: totalScores ?? 0,
+      scores_gte_50: above50 ?? 0,
+    },
   });
 }
