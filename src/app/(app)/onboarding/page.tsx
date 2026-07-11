@@ -10,6 +10,7 @@ import {
 } from "@/lib/profile/types";
 import {
   fetchProfile,
+  reparseResume,
   saveProfile,
   uploadResume,
 } from "@/components/profile/api";
@@ -20,15 +21,30 @@ type Step = "upload" | "resume" | "preferences" | "done";
 
 const steps: Step[] = ["upload", "resume", "preferences", "done"];
 
+function autofillSummary(resume: ParsedResume, preferences: Preferences) {
+  const parts = [
+    resume.skills.length ? `${resume.skills.length} skills` : null,
+    resume.experience.length ? `${resume.experience.length} roles` : null,
+    resume.education.length ? `${resume.education.length} education` : null,
+    preferences.roles.length
+      ? `${preferences.roles.length} target titles`
+      : null,
+  ].filter(Boolean);
+  return parts.length
+    ? `Auto-filled from your resume: ${parts.join(", ")}. Review and continue.`
+    : "Resume extracted. Review and continue.";
+}
+
 export default function OnboardingPage() {
   const [step, setStep] = useState<Step>("upload");
   const [resume, setResume] = useState<ParsedResume>(emptyParsedResume());
   const [preferences, setPreferences] =
     useState<Preferences>(emptyPreferences());
+  const [hasFile, setHasFile] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [parseWarning, setParseWarning] = useState<string | null>(null);
+  const [autofillNote, setAutofillNote] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,8 +54,18 @@ export default function OnboardingPage() {
         if (cancelled) return;
         setResume(profile.resume_parsed);
         setPreferences(profile.preferences);
+        setHasFile(Boolean(profile.resume_raw_url));
         if (profile.resume_raw_url) {
-          setStep("resume");
+          const populated =
+            profile.resume_parsed.skills.length > 0 ||
+            profile.resume_parsed.experience.length > 0 ||
+            Boolean(profile.resume_parsed.summary?.trim());
+          setStep(populated ? "resume" : "upload");
+          if (populated) {
+            setAutofillNote(
+              autofillSummary(profile.resume_parsed, profile.preferences)
+            );
+          }
         }
       } catch (err) {
         if (!cancelled) {
@@ -58,15 +84,40 @@ export default function OnboardingPage() {
     if (!file) return;
     setBusy(true);
     setError(null);
-    setParseWarning(null);
+    setAutofillNote(null);
     try {
       const result = await uploadResume(file);
       setResume(result.resume_parsed);
-      if (result.preferences) setPreferences(result.preferences as Preferences);
-      if (result.parse_error) setParseWarning(result.parse_error);
+      setPreferences(result.preferences);
+      setHasFile(true);
+      setAutofillNote(
+        autofillSummary(result.resume_parsed, result.preferences)
+      );
       setStep("resume");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Upload or AI extraction failed — try again"
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleReparse() {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await reparseResume();
+      setResume(result.resume_parsed);
+      setPreferences(result.preferences);
+      setAutofillNote(
+        autofillSummary(result.resume_parsed, result.preferences)
+      );
+      setStep("resume");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Re-extract failed");
     } finally {
       setBusy(false);
     }
@@ -76,7 +127,7 @@ export default function OnboardingPage() {
     setBusy(true);
     setError(null);
     try {
-      await saveProfile({ resume_parsed: resume });
+      await saveProfile({ resume_parsed: resume, preferences });
       setStep("preferences");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
@@ -120,11 +171,12 @@ export default function OnboardingPage() {
     <div className="mx-auto max-w-2xl">
       <h1 className="text-2xl font-semibold tracking-tight">Onboarding</h1>
       <p className="mt-2 text-sm text-neutral-600">
-        Upload your resume, confirm what we extracted, then set job preferences.
+        Upload your resume once — AI fills summary, skills, experience,
+        education, and suggested target roles. You only review and confirm.
       </p>
 
       <ol className="mt-6 flex flex-wrap gap-2 text-xs font-medium uppercase tracking-wide text-neutral-500">
-        {["Upload", "Resume", "Preferences", "Done"].map((label, i) => (
+        {["Upload", "Review", "Preferences", "Done"].map((label, i) => (
           <li
             key={label}
             className={
@@ -142,9 +194,12 @@ export default function OnboardingPage() {
           {error}
         </p>
       ) : null}
-      {parseWarning ? (
-        <p className="mt-4 text-sm text-amber-700" role="status">
-          Parse note: {parseWarning}. You can fill in the fields manually.
+      {autofillNote ? (
+        <p
+          className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900"
+          role="status"
+        >
+          {autofillNote}
         </p>
       ) : null}
 
@@ -161,30 +216,52 @@ export default function OnboardingPage() {
             />
           </label>
           {busy ? (
-            <p className="text-sm text-neutral-600">Uploading and parsing…</p>
+            <p className="text-sm text-neutral-600">
+              Uploading and extracting fields with AI…
+            </p>
+          ) : null}
+          {hasFile ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void handleReparse()}
+              className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium disabled:opacity-60"
+            >
+              {busy ? "Extracting…" : "Re-extract from uploaded resume"}
+            </button>
           ) : null}
         </div>
       ) : null}
 
       {step === "resume" ? (
         <div className="mt-8 space-y-6">
-          <ResumeFieldsEditor value={resume} onChange={setResume} />
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
               disabled={busy}
-              onClick={() => setStep("upload")}
-              className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium disabled:opacity-60"
+              onClick={() => void handleReparse()}
+              className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium disabled:opacity-60"
             >
-              Back
+              {busy ? "Re-extracting…" : "Re-extract with AI"}
             </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setStep("upload")}
+              className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium disabled:opacity-60"
+            >
+              Upload a different file
+            </button>
+          </div>
+          <ResumeFieldsEditor value={resume} onChange={setResume} />
+          <div className="flex flex-wrap gap-3">
             <button
               type="button"
               disabled={busy}
               onClick={handleSaveResume}
               className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
             >
-              {busy ? "Saving…" : "Continue"}
+              {busy ? "Saving…" : "Looks good — continue"}
             </button>
           </div>
         </div>
@@ -192,6 +269,9 @@ export default function OnboardingPage() {
 
       {step === "preferences" ? (
         <div className="mt-8 space-y-6">
+          <p className="text-sm text-neutral-600">
+            Target roles were suggested from your resume. Adjust if needed.
+          </p>
           <PreferencesEditor value={preferences} onChange={setPreferences} />
           <div className="flex flex-wrap gap-3">
             <button

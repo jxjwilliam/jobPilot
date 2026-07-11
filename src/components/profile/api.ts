@@ -35,7 +35,7 @@ export async function saveProfile(payload: {
 }
 
 export async function uploadResume(file: File): Promise<
-  ProfilePayload & { parse_error?: string | null }
+  ProfilePayload & { parse_error?: string | null; autofilled?: boolean }
 > {
   const form = new FormData();
   form.append("file", file);
@@ -43,11 +43,30 @@ export async function uploadResume(file: File): Promise<
     method: "POST",
     body: form,
   });
+  const body = (await res.json().catch(() => ({}))) as ProfilePayload & {
+    error?: string;
+    parse_error?: string | null;
+    autofilled?: boolean;
+  };
   if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(body.error ?? "Upload failed");
   }
-  return res.json() as Promise<ProfilePayload & { parse_error?: string | null }>;
+  return body;
+}
+
+export async function reparseResume(): Promise<
+  ProfilePayload & { parse_error?: string | null; autofilled?: boolean }
+> {
+  const res = await fetch("/api/profile/resume/reparse", { method: "POST" });
+  const body = (await res.json().catch(() => ({}))) as ProfilePayload & {
+    error?: string;
+    parse_error?: string | null;
+    autofilled?: boolean;
+  };
+  if (!res.ok) {
+    throw new Error(body.error ?? "Re-extract failed");
+  }
+  return body;
 }
 
 export function csvToList(value: string): string[] {

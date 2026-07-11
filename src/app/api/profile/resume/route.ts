@@ -1,6 +1,27 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { parseResumeFromBuffer } from "@/lib/profile/parse-resume";
+import {
+  isResumePopulated,
+  parseResumeFromBuffer,
+} from "@/lib/profile/parse-resume";
+import {
+  PreferencesSchema,
+  emptyPreferences,
+  type Preferences,
+} from "@/lib/profile/types";
+import { ParsedResumeSchema } from "@/lib/llm/schemas";
+
+async function loadExistingPreferences(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string
+): Promise<Preferences> {
+  const { data } = await supabase
+    .from("profiles")
+    .select("preferences")
+    .eq("user_id", userId)
+    .maybeSingle();
+  return PreferencesSchema.parse(data?.preferences ?? {});
+}
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -43,16 +64,35 @@ export async function POST(request: Request) {
     );
   }
 
-  const { parsed, error: parseError } = await parseResumeFromBuffer(
+  const existingPreferences = await loadExistingPreferences(supabase, user.id);
+  const { parsed, preferences, error: parseError } = await parseResumeFromBuffer(
     buffer,
-    file.type || filename
+    file.type || filename,
+    { existingPreferences }
   );
+
+  if (parseError || !isResumePopulated(parsed)) {
+    // Keep the uploaded file, but do not wipe profile with empty parse.
+    return NextResponse.json(
+      {
+        error:
+          parseError ??
+          "Could not auto-extract resume fields. Try again or use a text-based PDF/DOCX.",
+        resume_raw_url: path,
+        resume_parsed: null,
+        preferences: existingPreferences,
+        parse_error: parseError ?? "empty_extraction",
+      },
+      { status: 422 }
+    );
+  }
 
   const { data: profile, error: updateError } = await supabase
     .from("profiles")
     .update({
       resume_raw_url: path,
       resume_parsed: parsed,
+      preferences,
       updated_at: new Date().toISOString(),
     })
     .eq("user_id", user.id)
@@ -67,9 +107,14 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({
-    resume_parsed: profile?.resume_parsed ?? parsed,
-    preferences: profile?.preferences ?? {},
+    resume_parsed: ParsedResumeSchema.parse(
+      profile?.resume_parsed ?? parsed
+    ),
+    preferences: PreferencesSchema.parse(
+      profile?.preferences ?? preferences ?? emptyPreferences()
+    ),
     resume_raw_url: profile?.resume_raw_url ?? path,
-    parse_error: parseError ?? null,
+    parse_error: null,
+    autofilled: true,
   });
 }

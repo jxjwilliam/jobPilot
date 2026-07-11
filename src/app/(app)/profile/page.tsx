@@ -10,6 +10,7 @@ import {
 } from "@/lib/profile/types";
 import {
   fetchProfile,
+  reparseResume,
   saveProfile,
   uploadResume,
 } from "@/components/profile/api";
@@ -28,7 +29,6 @@ export default function ProfilePage() {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
-  const [parseWarning, setParseWarning] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -52,21 +52,43 @@ export default function ProfilePage() {
     };
   }, []);
 
+  async function applyAutofill(result: {
+    resume_parsed: ParsedResume;
+    preferences: Preferences;
+    resume_raw_url: string | null;
+  }) {
+    setResume(result.resume_parsed);
+    setPreferences(result.preferences);
+    setResumeUrl(result.resume_raw_url);
+    setStatus(
+      `Auto-filled ${result.resume_parsed.skills.length} skills, ${result.resume_parsed.experience.length} roles from your resume.`
+    );
+  }
+
   async function handleUpload(file: File | null) {
     if (!file) return;
     setBusy(true);
     setError(null);
     setStatus(null);
-    setParseWarning(null);
     try {
       const result = await uploadResume(file);
-      setResume(result.resume_parsed);
-      setResumeUrl(result.resume_raw_url);
-      if (result.preferences) setPreferences(result.preferences as Preferences);
-      if (result.parse_error) setParseWarning(result.parse_error);
-      setStatus("Resume uploaded.");
+      await applyAutofill(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleReparse() {
+    setBusy(true);
+    setError(null);
+    setStatus(null);
+    try {
+      const result = await reparseResume();
+      await applyAutofill(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Re-extract failed");
     } finally {
       setBusy(false);
     }
@@ -131,7 +153,8 @@ export default function ProfilePage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Profile</h1>
         <p className="mt-2 text-sm text-neutral-600">
-          Update your resume data and job search preferences.
+          Upload a resume and AI fills the fields below. Edit only if something
+          looks wrong.
         </p>
       </div>
 
@@ -141,13 +164,11 @@ export default function ProfilePage() {
         </p>
       ) : null}
       {status ? (
-        <p className="text-sm text-neutral-700" role="status">
+        <p
+          className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900"
+          role="status"
+        >
           {status}
-        </p>
-      ) : null}
-      {parseWarning ? (
-        <p className="text-sm text-amber-700" role="status">
-          Parse note: {parseWarning}. Edit fields below as needed.
         </p>
       ) : null}
 
@@ -167,6 +188,21 @@ export default function ProfilePage() {
           className="block w-full text-sm"
           onChange={(e) => handleUpload(e.target.files?.[0] ?? null)}
         />
+        {resumeUrl ? (
+          <button
+            type="button"
+            disabled={busy || deleting}
+            onClick={() => void handleReparse()}
+            className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium disabled:opacity-60"
+          >
+            {busy ? "Extracting…" : "Re-extract fields with AI"}
+          </button>
+        ) : null}
+        {busy ? (
+          <p className="text-sm text-neutral-600">
+            Running AI extraction — fields will fill automatically…
+          </p>
+        ) : null}
       </section>
 
       <section className="space-y-4">
