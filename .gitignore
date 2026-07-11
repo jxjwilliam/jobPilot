@@ -8,3 +8,4 @@ node_modules/
 *.log
 .vercel/
 coverage/
+supabase/.temp/
