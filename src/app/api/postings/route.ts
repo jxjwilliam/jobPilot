@@ -11,6 +11,12 @@ async function requireUser() {
   return { supabase, user };
 }
 
+function daysAgoIso(days: number): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - days);
+  return d.toISOString();
+}
+
 export async function GET(request: Request) {
   const { supabase, user } = await requireUser();
   if (!user) {
@@ -26,6 +32,15 @@ export async function GET(request: Request) {
       { status: 400 }
     );
   }
+
+  const q = (searchParams.get("q") ?? "").trim().toLowerCase();
+  const remoteOnly = searchParams.get("remote") === "1";
+  const maxAgeDaysRaw = searchParams.get("max_age_days");
+  const maxAgeDays =
+    maxAgeDaysRaw != null && maxAgeDaysRaw !== ""
+      ? Number(maxAgeDaysRaw)
+      : null;
+  const sort = searchParams.get("sort") === "date" ? "date" : "score";
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
@@ -58,6 +73,9 @@ export async function GET(request: Request) {
         employment_type,
         apply_url,
         description_raw,
+        posted_at,
+        first_seen_at,
+        last_seen_at,
         is_active
       )
     `
@@ -86,6 +104,9 @@ export async function GET(request: Request) {
           employment_type: string | null;
           apply_url: string | null;
           description_raw: string;
+          posted_at: string | null;
+          first_seen_at: string | null;
+          last_seen_at: string | null;
           is_active: boolean;
         }
       | {
@@ -96,12 +117,15 @@ export async function GET(request: Request) {
           employment_type: string | null;
           apply_url: string | null;
           description_raw: string;
+          posted_at: string | null;
+          first_seen_at: string | null;
+          last_seen_at: string | null;
           is_active: boolean;
         }[]
       | null;
   };
 
-  const rows = ((data ?? []) as ScoreJoin[])
+  let rows = ((data ?? []) as ScoreJoin[])
     .map((row) => {
       const posting = Array.isArray(row.postings)
         ? row.postings[0]
@@ -116,6 +140,9 @@ export async function GET(request: Request) {
         employment_type: posting.employment_type,
         apply_url: posting.apply_url,
         description_raw: posting.description_raw,
+        posted_at: posting.posted_at,
+        first_seen_at: posting.first_seen_at,
+        last_seen_at: posting.last_seen_at,
         score: Number(row.score),
         rationale: row.rationale,
         matched_skills: Array.isArray(row.matched_skills)
@@ -127,7 +154,52 @@ export async function GET(request: Request) {
     })
     .filter((row): row is NonNullable<typeof row> => row != null);
 
-  const postings = filterByMinScore(rows, minScore);
+  rows = filterByMinScore(rows, minScore);
 
-  return NextResponse.json({ postings, min_score: minScore });
+  if (q) {
+    rows = rows.filter((row) => {
+      const hay =
+        `${row.title} ${row.company_name} ${row.location ?? ""} ${row.rationale}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }
+
+  if (remoteOnly) {
+    rows = rows.filter((row) => /remote/i.test(row.location ?? ""));
+  }
+
+  if (maxAgeDays != null && Number.isFinite(maxAgeDays) && maxAgeDays > 0) {
+    const cutoff = daysAgoIso(maxAgeDays);
+    rows = rows.filter((row) => {
+      // Prefer the freshest known timestamp — Greenhouse posted_at can be stale.
+      const candidates = [row.posted_at, row.first_seen_at, row.last_seen_at].filter(
+        (v): v is string => Boolean(v)
+      );
+      if (candidates.length === 0) return false;
+      const newest = candidates.sort().at(-1)!;
+      return newest >= cutoff;
+    });
+  }
+
+  if (sort === "date") {
+    rows.sort((a, b) => {
+      const da = a.posted_at ?? a.first_seen_at ?? "";
+      const db = b.posted_at ?? b.first_seen_at ?? "";
+      return db.localeCompare(da);
+    });
+  } else {
+    rows.sort((a, b) => b.score - a.score);
+  }
+
+  return NextResponse.json({
+    postings: rows,
+    min_score: minScore,
+    filters: {
+      q,
+      remote: remoteOnly,
+      max_age_days: maxAgeDays,
+      sort,
+    },
+    count: rows.length,
+  });
 }
