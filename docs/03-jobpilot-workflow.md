@@ -1,9 +1,10 @@
 # JobPilot — Current Implementation Workflow
 
 **Last updated:** 2026-07-11  
-**Companion:** `docs/superpowers/specs/2026-07-11-jobpilot-design.md`
+**Companion:** `docs/superpowers/specs/2026-07-11-jobpilot-design.md`  
+**Also see:** root `README.md` (setup), `docs/01-jobpilot-product-spec.md` (original spec)
 
-This document describes what the running app does today: user flows, background jobs, and sequence diagrams.
+This document describes what the running app does today: user flows, background jobs, and sequence diagrams. It is the source of truth for *implemented* behavior when product specs still mention deferred items (e.g. interview prep).
 
 ---
 

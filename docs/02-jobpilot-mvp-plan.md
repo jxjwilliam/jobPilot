@@ -2,6 +2,7 @@
 
 **Version:** 0.1
 **Companion to:** `01-jobpilot-product-spec.md`
+**Status:** MVP Must list shipped in-repo (auth, ingest, score, tailor, tracker, mock billing/email). Fast-follow items in §1.2 remain open.
 **Last updated:** July 11, 2026
 
 ---
@@ -148,7 +149,11 @@ No paid marketing budget assumed for MVP — go-to-market relies on organic comm
 
 ## 10. Immediate next actions
 
-1. Ship the landing page + waitlist this week
-2. Run validation outreach in parallel with early scaffolding (§4)
-3. If validation signal is positive by end of week 2, commit to the 8-week build timeline in §3
-4. If validation signal is weak, revisit against the two alternate cascade ideas noted in the original research (content-repurposing studio, MCP/agent-skill security gate) before continuing
+**Shipped:** modular Next.js + Supabase MVP (see `README.md`, `docs/03-jobpilot-workflow.md`).
+
+Suggested next:
+
+1. Soft-launch to waitlist / dogfood: poll → score → tailor loop with real users
+2. Wire live Stripe / Resend when keys are ready (`BILLING_MODE` / `EMAIL_MODE=live`)
+3. Fast-follow from §1.2 based on usage (remaining ATS sources, interview prep, analytics)
+4. Optional: revisit alternate cascade ideas from the research playbook only if JobPilot demand is weak

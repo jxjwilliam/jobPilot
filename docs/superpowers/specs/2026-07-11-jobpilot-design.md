@@ -1,7 +1,7 @@
 # JobPilot — Design Spec
 
 **Date:** 2026-07-11  
-**Status:** Approved for implementation  
+**Status:** Implemented (MVP) — runtime detail in `docs/03-jobpilot-workflow.md`  
 **Companions:** `docs/01-jobpilot-product-spec.md`, `docs/02-jobpilot-mvp-plan.md`, `docs/cascading-github-pipeline-playbook.md`
 
 ---

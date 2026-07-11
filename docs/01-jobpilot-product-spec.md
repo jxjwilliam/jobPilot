@@ -1,7 +1,7 @@
 # JobPilot — Product & Technical Specification
 
 **Version:** 0.1 (MVP)
-**Status:** Draft for build
+**Status:** Implemented (MVP Must scope) — see `docs/03-jobpilot-workflow.md` for runtime behavior
 **Owner:** [you]
 **Last updated:** July 11, 2026
 
