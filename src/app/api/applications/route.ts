@@ -120,7 +120,21 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from("applications")
-    .select("id, status, posting_id, profile_id, applied_at, notes, status_history")
+    .select(
+      `
+      id,
+      status,
+      posting_id,
+      profile_id,
+      applied_at,
+      notes,
+      status_history,
+      postings (
+        title,
+        company_name
+      )
+    `
+    )
     .eq("profile_id", profile.id)
     .order("id", { ascending: false });
 
@@ -128,5 +142,22 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ applications: data ?? [] });
+  const applications = (data ?? []).map((row) => {
+    const posting = Array.isArray(row.postings)
+      ? row.postings[0]
+      : row.postings;
+    return {
+      id: row.id,
+      status: row.status,
+      posting_id: row.posting_id,
+      profile_id: row.profile_id,
+      applied_at: row.applied_at,
+      notes: row.notes,
+      status_history: row.status_history,
+      title: posting?.title ?? null,
+      company_name: posting?.company_name ?? null,
+    };
+  });
+
+  return NextResponse.json({ applications });
 }

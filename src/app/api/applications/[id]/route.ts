@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { assertTransition } from "@/lib/applications/status";
 import {
   ParsedResumeSchema,
   type ParsedResume,
@@ -192,6 +193,17 @@ export async function PATCH(
   }
 
   if (typeof record.status === "string" && record.status !== existing.status) {
+    try {
+      assertTransition(existing.status, record.status);
+    } catch (err) {
+      return NextResponse.json(
+        {
+          error:
+            err instanceof Error ? err.message : "Invalid status transition",
+        },
+        { status: 400 }
+      );
+    }
     updates.status = record.status;
     const history = asHistory(existing.status_history);
     updates.status_history = [
