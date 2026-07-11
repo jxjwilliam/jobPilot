@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -117,12 +118,41 @@ export default function MatchesPage() {
       ) : null}
 
       {loading ? (
-        <p className="text-sm text-neutral-500">Loading matches…</p>
+        <div
+          className="flex items-center gap-2 text-sm text-neutral-500"
+          role="status"
+          aria-live="polite"
+        >
+          <span
+            className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-700"
+            aria-hidden
+          />
+          Loading matches…
+        </div>
       ) : postings.length === 0 ? (
-        <p className="text-sm text-neutral-600">
-          No matches at score ≥ {minScore} yet. Complete your profile and wait
-          for scoring to run.
-        </p>
+        <div className="space-y-3 rounded border border-dashed border-neutral-300 bg-neutral-50 px-4 py-6">
+          <p className="text-sm text-neutral-700">
+            No matches at score ≥ {minScore} yet.
+          </p>
+          <p className="text-sm text-neutral-600">
+            Finish onboarding so we can score roles against your profile, then
+            wait for the scoring job to run (or lower the min score).
+          </p>
+          <div className="flex flex-wrap gap-3 pt-1">
+            <Link
+              href="/onboarding"
+              className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800"
+            >
+              Complete profile
+            </Link>
+            <Link
+              href="/profile"
+              className="rounded border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-800 hover:bg-neutral-50"
+            >
+              Edit preferences
+            </Link>
+          </div>
+        </div>
       ) : (
         <ul className="divide-y divide-neutral-200 border-t border-neutral-200">
           {postings.map((posting) => (

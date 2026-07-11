@@ -99,7 +99,19 @@ export default function OnboardingPage() {
   }
 
   if (loading) {
-    return <p className="text-sm text-neutral-600">Loading profile…</p>;
+    return (
+      <div
+        className="flex items-center gap-2 text-sm text-neutral-600"
+        role="status"
+        aria-live="polite"
+      >
+        <span
+          className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-700"
+          aria-hidden
+        />
+        Loading profile…
+      </div>
+    );
   }
 
   const stepIndex = steps.indexOf(step);

@@ -152,11 +152,31 @@ export default function ApplicationsPage() {
       ) : null}
 
       {loading ? (
-        <p className="text-sm text-neutral-500">Loading applications…</p>
+        <div
+          className="flex items-center gap-2 text-sm text-neutral-500"
+          role="status"
+          aria-live="polite"
+        >
+          <span
+            className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-700"
+            aria-hidden
+          />
+          Loading applications…
+        </div>
       ) : applications.length === 0 ? (
-        <p className="text-sm text-neutral-500">
-          No applications yet. Tailor a match to start tracking.
-        </p>
+        <div className="space-y-3 rounded border border-dashed border-neutral-300 bg-neutral-50 px-4 py-6">
+          <p className="text-sm text-neutral-700">No applications yet.</p>
+          <p className="text-sm text-neutral-600">
+            Open Matches, pick a scored role, and hit Tailor to start tracking it
+            here.
+          </p>
+          <Link
+            href="/matches"
+            className="inline-flex rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800"
+          >
+            Browse matches
+          </Link>
+        </div>
       ) : (
         <>
           <div className="-mx-4 overflow-x-auto px-4 pb-2">
