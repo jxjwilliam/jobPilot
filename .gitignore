@@ -1,0 +1,10 @@
+.env
+.env.local
+.env*.local
+node_modules/
+.next/
+.superpowers/
+.DS_Store
+*.log
+.vercel/
+coverage/
