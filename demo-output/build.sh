@@ -14,15 +14,18 @@ mkdir -p "$FRAMES_DIR" "$AUDIO_DIR" "$TEMP_DIR"
 
 # Scenes configuration
 SCENES=(
-  "01-home:3"
-  "02-login:4"
-  "03-onboarding:5"
-  "04-matches:6"
-  "05-applications:6"
-  "06-profile:4"
-  "07-usage:3"
-  "08-cta:4"
+  "01-home:4.0"
+  "02-onboarding:5.9"
+  "03-matches:5.0"
+  "04-applications:6.1"
+  "05-profile:4.6"
+  "06-usage:4.0"
+  "07-cta:2.9"
 )
+
+# edge-tts rate (speed up voiceover to fit scene durations)
+TTS_RATE="+30%"
+TTS_VOICE="en-US-AndrewNeural"
 
 # Step 1: Screenshot HTML scenes
 echo "[1/4] Capturing scenes..."
@@ -51,9 +54,10 @@ for entry in "${SCENES[@]}"; do
 
   if command -v edge-tts &>/dev/null && [ -f "$txt" ]; then
     echo "  🎤 $name"
-    edge-tts --voice en-US-AndrewNeural --file "$out" --text "$(cat "$txt")" 2>/dev/null || \
+    edge-tts --voice "$TTS_VOICE" --rate="$TTS_RATE" --write-media "$out" -f "$txt" 2>/dev/null || \
       ffmpeg -y -f lavfi -i anullsrc=r=44100:cl=mono -t "$dur" "$out" 2>/dev/null
   else
+    echo "  ⚠️  edge-tts not found. Install: pip3 install edge-tts"
     ffmpeg -y -f lavfi -i anullsrc=r=44100:cl=mono -t "$dur" "$out" 2>/dev/null
   fi
 done
@@ -73,45 +77,46 @@ done
 # Step 4: Composite with crossfade
 echo "[4/4] Compositing final video..."
 
-# Cumulative durations for crossfade offset calculation
-# Durations: 3, 4, 5, 6, 6, 4, 3, 4
-CUMULATIVE=(3 7 12 18 24 28 31 35)
 XFADE_DUR=0.4
-OFFSETS=()
-for i in $(seq 0 6); do
-  off=$(echo "${CUMULATIVE[$i]} - $XFADE_DUR" | bc -l)
-  OFFSETS+=("$off")
+N=${#SCENES[@]}
+
+# Build cumulative offsets
+declare -a OFFSETS
+cumul=0
+for ((i=0; i<N-1; i++)); do
+  dur="${SCENES[$i]#*:}"
+  cumul=$(echo "$cumul + $dur - $XFADE_DUR" | bc -l)
+  OFFSETS+=("$cumul")
 done
 
-# Build ffmpeg command with all 8 inputs
-INPUTS=""
+# Build ffmpeg inputs
+INPUTS=()
 for entry in "${SCENES[@]}"; do
   name="${entry%%:*}"
-  INPUTS+=" -i \"$TEMP_DIR/seg_$name.mp4\""
+  INPUTS+=(-i "$TEMP_DIR/seg_$name.mp4")
 done
 
+# Build xfade filter chain
 FILTER=""
-for i in $(seq 0 7); do
+for ((i=0; i<N; i++)); do
   if [ $i -eq 0 ]; then
     FILTER+="[0:v]"
   elif [ $i -eq 1 ]; then
-    FILTER+="[1:v]xfade=transition=fade:duration=$XFADE_DUR:offset=${OFFSETS[0]}[s1]"
+    FILTER+="[1:v]xfade=transition=fade:duration=${XFADE_DUR}:offset=${OFFSETS[0]}[s1]"
   else
     prev=$((i-1))
     idx=$((i-1))
-    FILTER+="[s$prev][${i}:v]xfade=transition=fade:duration=$XFADE_DUR:offset=${OFFSETS[$idx]}[s$i]"
-  fi
-  if [ $i -lt 7 ]; then
-    FILTER+="; "
+    FILTER+=";[s$prev][${i}:v]xfade=transition=fade:duration=${XFADE_DUR}:offset=${OFFSETS[$idx]}[s$i]"
   fi
 done
 
-# Audio concat
-AUDIO_FILTER="[0:a][1:a][2:a][3:a][4:a][5:a][6:a][7:a]concat=n=8:v=0:a=1[aout]"
+# Build audio concat
+AUDIO_INPUTS="$(printf "[%d:a]" $(seq 0 $((N-1))))"
+AUDIO_FILTER="${AUDIO_INPUTS}concat=n=${N}:v=0:a=1[aout]"
 
-eval ffmpeg -y $INPUTS \
-  -filter_complex "\"${FILTER}; ${AUDIO_FILTER}\"" \
-  -map "\"[s7]\"" -map "\"[aout]\"" \
+ffmpeg -y "${INPUTS[@]}" \
+  -filter_complex "${FILTER};${AUDIO_FILTER}" \
+  -map "[s$((N-1))]" -map "[aout]" \
   -c:v libx264 -preset medium -crf 18 \
   -c:a aac -b:a 192k \
   -pix_fmt yuv420p -r "$FPS" \

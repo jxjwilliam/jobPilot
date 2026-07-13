@@ -1,75 +1,74 @@
 {
   "meta": {
     "title": "JobPilot Demo",
-    "description": "AI career copilot — live product walkthrough",
+    "description": "AI career copilot — product walkthrough with voiceover",
     "format": "manual",
     "resolution": "1920x1080",
     "fps": 30,
-    "total_duration_sec": 35
+    "total_duration_sec": 32.5
   },
   "scenes": [
     {
       "id": 1, "name": "Home",
       "html": "scenes/01-home.html",
-      "duration_sec": 3,
+      "duration_sec": 4.0,
       "narration_file": "narration/01-home.txt",
-      "narration_text": "JobPilot. Your AI career copilot. Land your next role without the grind.",
+      "narration_text": "JobPilot. Your AI career copilot. Find your next role without the grind.",
+      "voice": "en-US-AndrewNeural", "rate": "+30%",
       "transition": "fade", "transition_duration_sec": 0.4
     },
     {
-      "id": 2, "name": "Login",
-      "html": "scenes/02-login.html",
-      "duration_sec": 4,
-      "narration_file": "narration/02-login.txt",
-      "narration_text": "One click. Instant access. Magic link login — no passwords to remember or lose.",
-      "transition": "fade", "transition_duration_sec": 0.4
-    },
-    {
-      "id": 3, "name": "Onboarding",
-      "html": "scenes/03-onboarding.html",
-      "duration_sec": 5,
-      "narration_file": "narration/03-onboarding.txt",
+      "id": 2, "name": "Onboarding",
+      "html": "scenes/02-onboarding.html",
+      "duration_sec": 5.9,
+      "narration_file": "narration/02-onboarding.txt",
       "narration_text": "Upload one resume and AI fills your entire profile instantly. Summary, skills, experience — done.",
+      "voice": "en-US-AndrewNeural", "rate": "+30%",
       "transition": "fade", "transition_duration_sec": 0.4
     },
     {
-      "id": 4, "name": "Matches",
-      "html": "scenes/04-matches.html",
-      "duration_sec": 6,
-      "narration_file": "narration/04-matches.txt",
+      "id": 3, "name": "Matches",
+      "html": "scenes/03-matches.html",
+      "duration_sec": 5.0,
+      "narration_file": "narration/03-matches.txt",
       "narration_text": "Every job is scored against your unique profile. Zero to one hundred — so you know exactly where to focus.",
+      "voice": "en-US-AndrewNeural", "rate": "+30%",
       "transition": "fade", "transition_duration_sec": 0.4
     },
     {
-      "id": 5, "name": "Applications",
-      "html": "scenes/05-applications.html",
-      "duration_sec": 6,
-      "narration_file": "narration/05-applications.txt",
-      "narration_text": "Tailor your resume and cover letter with AI. Review before you apply. Track everything on a Kanban board from discovery to offer.",
+      "id": 4, "name": "Applications",
+      "html": "scenes/04-applications.html",
+      "duration_sec": 6.1,
+      "narration_file": "narration/04-applications.txt",
+      "narration_text": "Tailor your resume and cover letter with AI. Review before you apply. Track everything from discovery to offer.",
+      "voice": "en-US-AndrewNeural", "rate": "+30%",
       "transition": "fade", "transition_duration_sec": 0.4
     },
     {
-      "id": 6, "name": "Profile",
-      "html": "scenes/06-profile.html",
-      "duration_sec": 4,
-      "narration_file": "narration/06-profile.txt",
-      "narration_text": "Your skills, experience, and preferences — all managed in one place. Always up to date.",
+      "id": 5, "name": "Profile",
+      "html": "scenes/05-profile.html",
+      "duration_sec": 4.6,
+      "narration_file": "narration/05-profile.txt",
+      "narration_text": "Your skills, experience, and preferences — managed in one place, always up to date.",
+      "voice": "en-US-AndrewNeural", "rate": "+30%",
       "transition": "fade", "transition_duration_sec": 0.4
     },
     {
-      "id": 7, "name": "Usage",
-      "html": "scenes/07-usage.html",
-      "duration_sec": 3,
-      "narration_file": "narration/07-usage.txt",
-      "narration_text": "A generous free tier with no credit card needed. Upgrade when you outgrow it.",
+      "id": 6, "name": "Usage",
+      "html": "scenes/06-usage.html",
+      "duration_sec": 4.0,
+      "narration_file": "narration/06-usage.txt",
+      "narration_text": "A generous free tier included with no credit card needed. Upgrade when you outgrow it.",
+      "voice": "en-US-AndrewNeural", "rate": "+30%",
       "transition": "fade", "transition_duration_sec": 0.4
     },
     {
-      "id": 8, "name": "CTA",
-      "html": "scenes/08-cta.html",
-      "duration_sec": 4,
-      "narration_file": "narration/08-cta.txt",
+      "id": 7, "name": "CTA",
+      "html": "scenes/07-cta.html",
+      "duration_sec": 2.9,
+      "narration_file": "narration/07-cta.txt",
       "narration_text": "Stop grinding. Start landing. Try JobPilot today.",
+      "voice": "en-US-AndrewNeural", "rate": "+30%",
       "transition": "fade", "transition_duration_sec": 0.4
     }
   ]

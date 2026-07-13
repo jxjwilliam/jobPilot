@@ -6,6 +6,7 @@
 | [01-jobpilot-product-spec.md](./01-jobpilot-product-spec.md) | Product & technical specification (MVP) |
 | [02-jobpilot-mvp-plan.md](./02-jobpilot-mvp-plan.md) | Execution plan / MoSCoW / timeline |
 | [cascading-github-pipeline-playbook.md](./cascading-github-pipeline-playbook.md) | Upstream research that selected JobPilot |
+| [05-screenshot-demo-pipeline.md](./05-screenshot-demo-pipeline.md) | Screenshot UI + demo video pipeline (agent skills) |
 | [superpowers/specs/2026-07-11-jobpilot-design.md](./superpowers/specs/2026-07-11-jobpilot-design.md) | Brainstorming design lock-in |
 | [superpowers/plans/2026-07-11-jobpilot-mvp.md](./superpowers/plans/2026-07-11-jobpilot-mvp.md) | Bite-sized implementation plan |
 
