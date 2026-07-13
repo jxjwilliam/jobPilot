@@ -120,3 +120,20 @@ npm run build  # production build
 ## Account deletion
 
 **Profile → Danger zone** → `DELETE /api/account/delete` removes Storage objects under `resumes/{user_id}/` and deletes the auth user (FK cascade).
+
+<!-- screenshots -->
+## Screenshots
+
+| Home | Login | Matches |
+| --- | --- | --- |
+| ![Home](screenshots/home.png) | ![Login](screenshots/login.png) | ![Matches](screenshots/matches.png) |
+
+| Applications | Profile | Onboarding |
+| --- | --- | --- |
+| ![Applications](screenshots/applications.png) | ![Profile](screenshots/profile.png) | ![Onboarding](screenshots/onboarding.png) |
+
+| Usage |
+| --- |
+| ![Usage](screenshots/usage.png) |
+
+<!-- /screenshots -->

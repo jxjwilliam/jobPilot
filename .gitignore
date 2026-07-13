@@ -7,5 +7,7 @@ node_modules/
 .DS_Store
 *.log
 .vercel/
+.omo/
 coverage/
 supabase/.temp/
+docs/.obsidian/
