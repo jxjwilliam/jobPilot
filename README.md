@@ -121,6 +121,12 @@ npm run build  # production build
 
 **Profile → Danger zone** → `DELETE /api/account/delete` removes Storage objects under `resumes/{user_id}/` and deletes the auth user (FK cascade).
 
+## Demo video
+
+<video src="demo-output/output.mp4" controls width="100%">
+  <a href="demo-output/output.mp4">Download MP4</a>
+</video>
+
 <!-- screenshots -->
 ## Screenshots
 

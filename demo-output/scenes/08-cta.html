@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920, height=1080">
+<title>Scene 8 - CTA</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  width: 1920px; height: 1080px;
+  background: #0d0e12;
+  font-family: 'Inter', sans-serif;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  overflow: hidden; position: relative;
+}
+.glow {
+  position: absolute;
+  width: 700px; height: 700px;
+  border-radius: 50%; filter: blur(160px);
+  opacity: 0.35;
+}
+.glow-1 { top: -200px; left: -100px; background: #7c6af5; }
+.glow-2 { bottom: -200px; right: -100px; background: #4ade80; }
+.title {
+  font-size: 72px; font-weight: 800;
+  color: #c5d5ff; letter-spacing: -2px;
+  animation: fadeUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.url {
+  font-size: 28px; font-weight: 400;
+  color: rgba(197,213,255,0.4);
+  margin-top: 16px;
+  animation: fadeUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.4s both;
+}
+.cta {
+  margin-top: 40px;
+  background: linear-gradient(135deg, #7c6af5, #5b4ad0);
+  color: white;
+  font-size: 20px; font-weight: 600;
+  padding: 16px 48px;
+  border-radius: 100px;
+  animation: fadeUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.8s both;
+  box-shadow: 0 4px 30px rgba(124,106,245,0.3);
+}
+@keyframes fadeUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body>
+  <div class="glow glow-1"></div>
+  <div class="glow glow-2"></div>
+  <h1 class="title">JobPilot</h1>
+  <p class="url">jobpilot.app</p>
+  <div class="cta">Start your free trial →</div>
+</body>
+</html>

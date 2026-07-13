@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920, height=1080">
+<title>Scene 1 - Home</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;800&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  width: 1920px; height: 1080px;
+  background: #0d0e12;
+  font-family: 'Inter', sans-serif;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden; position: relative;
+}
+.screenshot {
+  position: absolute;
+  width: 1560px; height: auto;
+  border-radius: 12px;
+  box-shadow: 0 20px 100px rgba(0,0,0,0.6);
+  animation: zoomIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.overlay {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  height: 280px;
+  background: linear-gradient(transparent, rgba(13,14,18,0.92));
+  display: flex; flex-direction: column;
+  justify-content: flex-end; padding: 60px 100px;
+}
+.title {
+  font-size: 52px; font-weight: 800;
+  color: #c5d5ff; letter-spacing: -1px;
+  animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.4s both;
+}
+.sub {
+  font-size: 20px; font-weight: 600;
+  color: #7c6af5; margin-top: 8px;
+  animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.7s both;
+}
+@keyframes zoomIn { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body>
+  <img class="screenshot" src="../../screenshots/home.png">
+  <div class="overlay">
+    <div class="title">JobPilot</div>
+    <div class="sub">Your AI career copilot</div>
+  </div>
+</body>
+</html>
