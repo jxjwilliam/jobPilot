@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "supabase": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp?project_ref=yggdfseoswfblvjewaov",
+      "description": "Supabase MCP — database queries, migrations, project management, docs search"
+    }
+  }
+}

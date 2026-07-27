@@ -59,33 +59,28 @@ Live app → /screenshot-ui → real screenshots → README
 
 ## LinkedIn post (draft)
 
-> **Two AI agent skills that turned my SaaS demo from "meh" to "wow"**
+> **Shipping an MVP? Your README and demo still look empty?**
 >
-> If you're building with AI coding assistants (Claude Code, Cursor, etc.), these two skills are worth knowing:
+> Two AI agent skills worth trying if you want your product to *look* ready — without spending a weekend in a design tool:
 >
-> 📸 **`/screenshot-ui`** — Tell your agent "screenshot my app." It auto-discovers every route from the live DOM, logs in via cookie injection, captures all pages at 1440×900, and injects them into a clean markdown table in your README. No manual ⌘+Shift+4 around the nav bar.
+> 📸 **`screenshot-ui`** — Ask your AI assistant to screenshot your app. It walks through every screen, captures clean images, and drops them into your README. Visitors (and investors) see what you built instead of a wall of text.
 >
-> 🎬 **`/demo-video`** — Turns those screenshots into a 1920×1080 product walkthrough video. HTML scene files + ffmpeg crossfade + narration scripts (edge-tts ready). 8 scenes composited into a 35s MP4 with one build command.
+> 🎬 **`demo-video`** — Like [Guidde](https://www.guidde.com): turn those screenshots into a short product walkthrough video you can share on LinkedIn, in a pitch, or on your landing page. Story, scenes, narration — ready to ship.
 >
-> **The pipeline that clicked for me:**
-> 1. Agent discovers your app's routes → real login → screenshots → README
-> 2. Same screenshots become the hero of each video scene
-> 3. `bash build.sh` → 35s demo video ready to ship
+> **Use them together:**
+> 1. Enrich your README with real UI screenshots
+> 2. Reuse the same shots as a 30–60s MVP demo video
 >
-> For a Next.js + Supabase app with auth, cookie-based auth, and Kanban UI — went from zero to a polished demo video in about an hour. Most of that was me iterating on the script timing.
->
-> No green screen. No video editor. Just an agent, Playwright, ffmpeg, and good scene design.
+> I used both on JobPilot. README went from “trust me” to “here’s the product.” Demo went from screen-share chaos to a polished 35-second walkthrough.
 
 ### Short version
 
-> Two agent skills, one app, 35 seconds:
+> Building an MVP? Enrich your README and demo with two AI skills:
 >
-> `/screenshot-ui` → auto-captures every route of your live app, injects into README
-> `/demo-video` → turns those screenshots into a 1920×1080 product walkthrough
+> `screenshot-ui` → real app screenshots in your README
+> `demo-video` → Guidde-style walkthrough video from those same shots
 >
-> 8 scenes. Crossfade. Narration-ready. One build command.
->
-> No video editor needed.
+> Show the product. Don’t just describe it.
 
 ---
 
