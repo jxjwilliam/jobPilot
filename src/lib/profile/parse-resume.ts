@@ -118,6 +118,16 @@ function preferExistingPreferences(
       existing.excluded_industries,
       suggested.excluded_industries
     ),
+    // Essentials — keep existing, never overwrite from resume parse
+    full_name: existing.full_name || "",
+    photo_url: existing.photo_url || "",
+    selfie_url: existing.selfie_url || "",
+    linkedin_url: existing.linkedin_url || "",
+    github_url: existing.github_url || "",
+    portfolio_url: existing.portfolio_url || "",
+    email: existing.email || "",
+    phone: existing.phone || "",
+    postcode: existing.postcode || "",
   };
 }
 
@@ -136,6 +146,15 @@ function derivePreferencesFallback(resume: ParsedResume): Preferences {
     remote_pref: "",
     salary_floor: null,
     excluded_industries: [],
+    full_name: "",
+    photo_url: "",
+    selfie_url: "",
+    linkedin_url: "",
+    github_url: "",
+    portfolio_url: "",
+    email: "",
+    phone: "",
+    postcode: "",
   });
 }
 

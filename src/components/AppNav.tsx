@@ -4,6 +4,7 @@ import { JobPilotLogo } from "@/components/brand/JobPilotLogo";
 const links = [
   { href: "/matches", label: "Matches" },
   { href: "/applications", label: "Applications" },
+  { href: "/essentials", label: "Essentials" },
   { href: "/profile", label: "Profile" },
   { href: "/usage", label: "Usage" },
 ] as const;

@@ -34,6 +34,7 @@ export async function GET(request: Request) {
   }
 
   const q = (searchParams.get("q") ?? "").trim().toLowerCase();
+  const locationFilter = (searchParams.get("location") ?? "").trim().toLowerCase();
   const remoteOnly = searchParams.get("remote") === "1";
   const maxAgeDaysRaw = searchParams.get("max_age_days");
   const maxAgeDays =
@@ -164,6 +165,13 @@ export async function GET(request: Request) {
     });
   }
 
+  if (locationFilter) {
+    rows = rows.filter((row) => {
+      const loc = (row.location ?? "").toLowerCase();
+      return loc.includes(locationFilter);
+    });
+  }
+
   if (remoteOnly) {
     rows = rows.filter((row) => /remote/i.test(row.location ?? ""));
   }
@@ -183,12 +191,22 @@ export async function GET(request: Request) {
 
   if (sort === "date") {
     rows.sort((a, b) => {
+      // Remote-first within same timeframe
+      const aRemote = /remote/i.test(a.location ?? "") ? 1 : 0;
+      const bRemote = /remote/i.test(b.location ?? "") ? 1 : 0;
+      if (aRemote !== bRemote) return bRemote - aRemote;
       const da = a.posted_at ?? a.first_seen_at ?? "";
       const db = b.posted_at ?? b.first_seen_at ?? "";
       return db.localeCompare(da);
     });
   } else {
-    rows.sort((a, b) => b.score - a.score);
+    rows.sort((a, b) => {
+      // Remote-first within same score tier
+      const aRemote = /remote/i.test(a.location ?? "") ? 1 : 0;
+      const bRemote = /remote/i.test(b.location ?? "") ? 1 : 0;
+      if (aRemote !== bRemote) return bRemote - aRemote;
+      return b.score - a.score;
+    });
   }
 
   return NextResponse.json({
@@ -196,6 +214,7 @@ export async function GET(request: Request) {
     min_score: minScore,
     filters: {
       q,
+      location: locationFilter,
       remote: remoteOnly,
       max_age_days: maxAgeDays,
       sort,
