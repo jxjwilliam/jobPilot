@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchGreenhouseJobs } from "./greenhouse";
 import { fetchLeverPostings } from "./lever";
+import { fetchAshbyJobs } from "./ashby";
+import { fetchWorkableJobs } from "./workable";
+import { fetchRecruiteeJobs } from "./recruitee";
+import { fetchPersonioJobs } from "./personio";
 import {
   MAX_CONSECUTIVE_FAILURES,
   POLL_BATCH_SIZE,
@@ -19,6 +23,18 @@ async function fetchForCompany(
   }
   if (company.ats_source === "lever") {
     return fetchLeverPostings(company.board_slug, company.company_name);
+  }
+  if (company.ats_source === "ashby") {
+    return fetchAshbyJobs(company.board_slug, company.company_name);
+  }
+  if (company.ats_source === "workable") {
+    return fetchWorkableJobs(company.board_slug, company.company_name);
+  }
+  if (company.ats_source === "recruitee") {
+    return fetchRecruiteeJobs(company.board_slug, company.company_name);
+  }
+  if (company.ats_source === "personio") {
+    return fetchPersonioJobs(company.board_slug, company.company_name);
   }
   throw new Error(`Unsupported ats_source: ${company.ats_source}`);
 }

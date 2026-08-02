@@ -13,31 +13,35 @@ This document describes what the running app does today: user flows, background 
 ```mermaid
 flowchart LR
   subgraph Client
-    UI[Next.js App Router UI]
+    UI[Next.js App Router UI\nshadcn/ui components]
   end
 
   subgraph Server["Next.js Route Handlers"]
     Auth[Auth + Profile APIs]
-    ScoreAPI[Score / Postings APIs]
-    AppAPI[Applications APIs]
+    ScoreAPI[Score / Browse APIs]
+    AppAPI[Applications / Follow-up APIs]
+    InterviewAPI[Interview APIs]
     Cron[Cron: poll / score / digest]
   end
 
   subgraph Data
     SB[(Supabase Auth + Postgres + Storage)]
     LLM[OpenAI-compatible LLM]
-    ATS[Greenhouse + Lever public APIs]
+    ATS[6 ATS sources\nGreenhouse/Lever/Ashby/Workable/Recruitee/Personio]
   end
 
   UI --> Auth
   UI --> ScoreAPI
   UI --> AppAPI
+  UI --> InterviewAPI
   Auth --> SB
   Auth --> LLM
   ScoreAPI --> SB
   ScoreAPI --> LLM
   AppAPI --> SB
   AppAPI --> LLM
+  InterviewAPI --> SB
+  InterviewAPI --> LLM
   Cron --> ATS
   Cron --> SB
   Cron --> LLM
@@ -47,13 +51,14 @@ flowchart LR
 
 | Module | Role |
 |---|---|
-| `ingestion/` | Poll Greenhouse/Lever → upsert `postings` |
-| `scoring/` | LLM fit score → `scores` |
+| `ingestion/` | Poll 6 ATS sources → upsert `postings` |
+| `scoring/` | LLM fit score → `scores`, with SSE streaming |
 | `tailoring/` | LLM resume/cover letter drafts → `applications` |
-| `applications/` | Status state machine |
+| `applications/` | Status state machine + stale detection |
 | `billing/` | Quota + mock Stripe |
 | `notifications/` | Weekly digest + mock email |
 | `profile/` | Resume parse / preference extract |
+| `stream/` | SSE streaming helper (Web Streams API) |
 
 ---
 
@@ -240,34 +245,135 @@ Invalid transitions are rejected by `assertTransition` in `src/lib/applications/
 |---|---|---|
 | `users` | Auth signup trigger | Billing / digest |
 | `profiles` | Resume upload / profile PUT | Scoring, Matches gate |
+| `resumes` | Resume upload (multi-resume support) | Profile page, scoring |
 | `companies` | Seed SQL | Poller |
-| `postings` | Poller | Scoring, Matches join |
+| `postings` | Poller (6 ATS sources) | Scoring, Browse page, Matches join |
 | `scores` | Score run / cron | Matches list |
-| `applications` | Tailor flow + Kanban PATCH | Tracker, review UI |
+| `applications` | Tailor flow + Kanban PATCH | Tracker, review UI, follow-up |
+| `interview_sessions` | Interview generate / evaluate | Interview UI, report |
 | `usage_counters` | Tailor increment | Usage page / quota |
 
 ---
 
-## 5. Important API map
+## 8. Important API map
 
 | Method | Path | Who | Purpose |
 |---|---|---|---|
 | POST | `/api/profile/resume` | User | Upload + LLM autofill |
 | POST | `/api/profile/resume/reparse` | User | Re-extract stored file |
 | GET/PUT | `/api/profile` | User | Read/update profile |
-| POST | `/api/score/run` | User | Score my profile vs jobs |
-| GET | `/api/postings?min_score=` | User | Matches list |
+| POST | `/api/score/run` | User | Score my profile vs jobs (SSE streaming) |
+| GET | `/api/postings?min_score=` | User | Matches list (scored only) |
+| GET | `/api/postings/browse` | Public | Browse all active postings |
+| GET | `/api/stats` | User | Pipeline health (counts, timestamps) |
 | POST | `/api/applications` | User | Create application shell |
 | POST | `/api/applications/:id/tailor` | User | Generate drafts (quota) |
 | POST | `/api/applications/:id/regenerate` | User | Free regenerate |
+| POST | `/api/applications/:id/follow-up` | User | Draft follow-up email |
 | PATCH | `/api/applications/:id` | User | Status / notes / cover letter |
-| POST | `/api/cron/poll-ats` | Cron secret | Ingest jobs |
+| POST | `/api/interview/generate` | User | Generate interview questions |
+| POST | `/api/interview/evaluate` | User | Evaluate answer + STAR feedback |
+| POST | `/api/cron/poll-ats` | Cron secret | Ingest 6 ATS sources |
 | POST | `/api/cron/score` | Cron secret | Batch score all profiles |
 | POST | `/api/cron/digest` | Cron secret | Weekly email |
 
 ---
 
-## 6. Why Matches can look empty
+## 6. New workflows (Phase 2)
+
+### 6.1 Browse all jobs
+
+```mermaid
+sequenceDiagram
+  actor U as User
+  participant FE as /browse
+  participant API as GET /api/postings/browse
+  participant DB as postings
+
+  U->>FE: Search / filter jobs
+  FE->>API: ?q=engineer&location=Remote&page=1
+  API->>DB: SELECT active postings (ilike filters)
+  DB-->>API: paginated results
+  API-->>FE: { postings, total, total_pages }
+  FE-->>U: Job cards with Score / View buttons
+  U->>FE: Click "Score it"
+  FE->>FE: Navigate to /matches (auto-score triggers)
+```
+
+### 6.2 Mock interview
+
+```mermaid
+sequenceDiagram
+  actor U as User
+  participant FE as /interview/[id]
+  participant Gen as POST /api/interview/generate
+  participant Eval as POST /api/interview/evaluate
+  participant LLM as LLM
+  participant DB as interview_sessions
+
+  U->>FE: Open interview from Matches
+  FE->>Gen: { posting_id }
+  Gen->>DB: INSERT session (in_progress)
+  Gen->>LLM: Generate 8-12 questions from JD
+  LLM-->>Gen: questions JSON
+  Gen-->>FE: { session_id, questions }
+
+  loop Each question
+    U->>FE: Type answer
+    FE->>Eval: { session_id, question_index, answer }
+    Eval->>LLM: Evaluate answer (STAR scoring)
+    LLM-->>Eval: { score, strengths, improvements, star_assessment }
+    Eval->>DB: UPDATE answers array
+    Eval-->>FE: { feedback, completed, session_status }
+    FE-->>U: Score + feedback for this question
+  end
+
+  FE-->>U: Complete report with overall score
+```
+
+### 6.3 Stale follow-up
+
+```mermaid
+sequenceDiagram
+  actor U as User
+  participant FE as /applications/[id]
+  participant API as POST /api/applications/:id/follow-up
+  participant LLM as LLM
+  participant DB as applications
+
+  U->>FE: Open application (applied 21+ days ago)
+  FE-->>U: Stale badge: "21d stale"
+  U->>FE: Click "Draft follow-up email"
+  FE->>API: POST
+  API->>DB: Load posting + application data
+  API->>LLM: Generate follow-up email draft
+  LLM-->>API: { subject, body }
+  API->>DB: PATCH notes (append follow-up draft)
+  API-->>FE: { subject, body, stale_days }
+  FE-->>U: Follow-up email draft saved
+```
+
+### 6.4 Auto-scoring
+
+```mermaid
+sequenceDiagram
+  actor U as User
+  participant FE as /matches
+  participant Stats as GET /api/stats
+  participant Score as POST /api/score/run (SSE)
+
+  U->>FE: Enter Matches page
+  FE->>Stats: Pipeline health
+  Stats-->>FE: { total_postings: 1247, scored_count: 0 }
+  FE-->>U: "1,247 jobs available · 0 scored"
+  FE->>Score: { limit: 20, stream: true }
+  Score-->>FE: SSE: { type: "progress", index: 1, company: "Stripe", title: "SWE" }
+  FE-->>U: Progress bar: "1/20 · Scoring SWE at Stripe"
+  Score-->>FE: SSE: { type: "done", scored: 17 }
+  FE-->>U: Refresh matches list
+```
+
+## 7. Why Matches can look empty
 
 Matches only lists rows in `scores` for **your** profile above `min_score`.
 
@@ -275,9 +381,11 @@ Typical first-run state:
 
 1. Poller has filled `postings` (thousands of jobs) ✓  
 2. Profile has `resume_parsed` ✓  
-3. `scores` is still empty ✗ → Matches shows empty  
+3. `scores` is still empty ✗ → **Auto-score triggers automatically!**
+4. Progress bar shows "Scoring 1/20 · Stripe SWE…"
+5. Matches appear as scoring completes
 
-**Fix in UI:** open Matches → **Score matches now** (calls `/api/score/run`). Repeat until enough high-fit jobs appear. Lower min score if needed.
+You can also browse all postings at `/browse` before scoring — search, filter, and trigger scoring on individual jobs.
 
 ---
 

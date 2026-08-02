@@ -1,22 +1,29 @@
 # JobPilot
 
-JobPilot is an AI career-operations pipeline: upload a resume, get fields auto-filled by LLM, score Greenhouse/Lever jobs against your profile, tailor applications with human review, track them on a Kanban board, and receive a weekly digest. Stripe and email run in **mock** mode by default.
+JobPilot is an AI career-operations pipeline: upload a resume, get fields auto-filled by LLM, browse and score jobs from 6 ATS platforms, tailor applications with human review, practice mock interviews, track everything on a Kanban board, and receive a weekly digest. Stripe and email run in **mock** mode by default.
 
-## What’s implemented
+## What's implemented
 
 - Magic-link auth (Supabase)
 - Resume upload → **AI autofill** (summary, skills, experience, education, suggested preferences) + re-extract
-- ATS ingestion: Greenhouse + Lever (`/api/cron/poll-ats`)
-- Scoring: cron batch **or** Matches → **Score matches now** (`/api/score/run`)
-- Tailoring + regenerate + review UI; Kanban tracker
+- ATS ingestion: Greenhouse, Lever, Ashby, Workable, Recruitee, Personio (`/api/cron/poll-ats`)
+- **Streaming scoring** with real-time progress bar (`/api/score/run` — SSE)
+- **Auto-scoring** — triggers automatically when you enter Matches with unscored jobs
+- **Browse page** — search all active job postings, filter by keyword/location/remote (`/browse`)
+- **Mock interview** — AI generates role-specific questions, evaluates answers with STAR scoring, produces report (`/interview/[id]`)
+- **Stale application detection** — flags applications idle for 21+ days, drafts AI follow-up emails
+- Tailoring + regenerate + review UI; Kanban tracker with stale badges
+- Pipeline stats bar (total jobs, scored count, applications, last poll time)
 - Quota / mock Stripe portal; weekly digest (mock email)
 - Brand: SVG favicon + logo in nav / login / home
+- **shadcn/ui** component library (Button, Card, Badge, Progress, Skeleton, Dialog, Tabs, DropdownMenu)
 
 ## Docs map
 
 | Doc | Purpose |
 |---|---|
 | [`docs/03-jobpilot-workflow.md`](docs/03-jobpilot-workflow.md) | **Start here** — runtime workflows + sequence diagrams |
+| [`docs/06-jobpilot-improvement-plan.md`](docs/06-jobpilot-improvement-plan.md) | **Improvement plan** — architecture decisions + Phase 1/2 changes |
 | [`docs/01-jobpilot-product-spec.md`](docs/01-jobpilot-product-spec.md) | Original product/technical spec |
 | [`docs/02-jobpilot-mvp-plan.md`](docs/02-jobpilot-mvp-plan.md) | Original MVP sequencing / MoSCoW |
 | [`docs/superpowers/specs/2026-07-11-jobpilot-design.md`](docs/superpowers/specs/2026-07-11-jobpilot-design.md) | Brainstorming design decisions |
@@ -53,8 +60,6 @@ npm install
 npx supabase db push
 ```
 
-If the linked project already has migration `20260711000000_init`, push may report nothing new.
-
 3. Seed ATS companies (recommended):
 
 ```bash
@@ -82,64 +87,63 @@ curl -sS -X POST "$BASE/api/cron/poll-ats" \
 
 # 2) Complete onboarding (upload resume → review autofill)
 
-# 3) Score from Matches UI (“Score matches now”), or:
-curl -sS -X POST "$BASE/api/cron/score" \
-  -H "Authorization: Bearer $CRON_SECRET"
+# 3) Open /matches — scoring auto-triggers with progress bar!
 ```
 
-| Route | Role |
-|---|---|
-| `POST /api/cron/poll-ats` | Ingest Greenhouse + Lever postings |
-| `POST /api/cron/score` | Batch-score unscored profile × posting pairs |
-| `POST /api/score/run` | Score **current user** (session auth; used by Matches UI) |
-| `POST /api/cron/digest` | Weekly digests (mock or Resend) |
-| `POST /api/profile/resume` | Upload + LLM autofill |
-| `POST /api/profile/resume/reparse` | Re-extract from stored file |
+## API map
 
-**Note:** Matches only lists rows in `scores`. After ingest you can have thousands of `postings` but an empty Matches page until scoring runs.
+| Method | Path | Who | Purpose |
+|---|---|---|---|
+| POST | `/api/cron/poll-ats` | Cron secret | Ingest 6 ATS sources |
+| POST | `/api/cron/score` | Cron secret | Batch-score all profiles |
+| POST | `/api/cron/digest` | Cron secret | Weekly digests (mock or Resend) |
+| POST | `/api/score/run` | User (session) | Score current user with SSE streaming |
+| GET | `/api/postings` | User (session) | Matches list (scored only) |
+| GET | `/api/postings/browse` | Public | Browse all active postings |
+| GET | `/api/stats` | User (session) | Pipeline health (counts, timestamps) |
+| POST | `/api/profile/resume` | User | Upload + LLM autofill |
+| POST | `/api/profile/resume/reparse` | User | Re-extract from stored file |
+| POST | `/api/applications` | User | Create application shell |
+| POST | `/api/applications/:id/tailor` | User | Generate tailored drafts (quota) |
+| POST | `/api/applications/:id/regenerate` | User | Free regenerate with instruction |
+| POST | `/api/applications/:id/follow-up` | User | Generate follow-up email draft |
+| PATCH | `/api/applications/:id` | User | Status / notes / cover letter |
+| POST | `/api/interview/generate` | User | Generate interview questions from JD |
+| POST | `/api/interview/evaluate` | User | Evaluate answer + STAR feedback |
+| POST | `/api/billing/portal` | User | Stripe/mock portal |
+| DELETE | `/api/account/delete` | User | Delete account + storage |
 
-## Mock billing & email
+## Page routes
 
-- **`BILLING_MODE=mock`** — upgrade portal returns a local mock URL; no Stripe charges.
-- **`EMAIL_MODE=mock`** — digests log to the server console (`{ mocked: true }`).
+| Page | Path | Description |
+|---|---|---|
+| Matches | `/matches` | Scored jobs with streaming Auto-score, Tailor, Mock Interview buttons |
+| Browse | `/browse` | Search all active postings across 6 ATS platforms |
+| Applications | `/applications` | Kanban tracker with stale detection badges |
+| Application Detail | `/applications/[id]` | Resume diff, cover letter edit, follow-up draft |
+| Interview | `/interview/[id]` | Mock interview with AI question generation + evaluation |
+| Profile | `/profile` | Edit profile, preferences, upload resume |
+| Onboarding | `/onboarding` | First-run resume upload + autofill |
+| Usage | `/usage` | Quota counter |
 
 ## Architecture
 
-Core libraries: `src/lib/{ingestion,scoring,tailoring,applications,billing,notifications,llm,profile}`.
+Core libraries: `src/lib/{ingestion,scoring,tailoring,applications,billing,notifications,llm,profile,stream}`.
 
-Brand assets: `public/favicon.svg`, `public/logo.svg`, `src/components/brand/JobPilotLogo.tsx`.
+Components: `src/components/{AppNav,EmptyState,PipelineStats,brand,profile,ui}`.
+
+UI system: **shadcn/ui** (Button, Card, Badge, Progress, Skeleton, Tabs, Dialog, DropdownMenu) with Tailwind CSS v3.
+
+Data model: `users`, `profiles`, `resumes`, `companies`, `postings`, `scores`, `applications`, `interview_sessions`, `usage_counters`. RLS on all.
 
 ## Scripts
 
 ```bash
 npm run dev    # Next.js (Turbopack)
-npm test       # Vitest
+npm test       # Vitest (39 tests across 9 files)
 npm run build  # production build
 ```
 
 ## Account deletion
 
 **Profile → Danger zone** → `DELETE /api/account/delete` removes Storage objects under `resumes/{user_id}/` and deletes the auth user (FK cascade).
-
-## Demo video
-
-<video src="demo-output/output.mp4" controls width="100%">
-  <a href="demo-output/output.mp4">Download MP4</a>
-</video>
-
-<!-- screenshots -->
-## Screenshots
-
-| Home | Login | Matches |
-| --- | --- | --- |
-| ![Home](screenshots/home.png) | ![Login](screenshots/login.png) | ![Matches](screenshots/matches.png) |
-
-| Applications | Profile | Onboarding |
-| --- | --- | --- |
-| ![Applications](screenshots/applications.png) | ![Profile](screenshots/profile.png) | ![Onboarding](screenshots/onboarding.png) |
-
-| Usage |
-| --- |
-| ![Usage](screenshots/usage.png) |
-
-<!-- /screenshots -->

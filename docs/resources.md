@@ -28,6 +28,9 @@ zod               — Schema validation for LLM structured output
 pdf-parse         — PDF resume text extraction
 mammoth           — DOCX resume text extraction
 server-only       — Enforce server-only module boundaries
+clsx              — Conditional className utility (shadcn/ui)
+tailwind-merge    — Tailwind class merging (shadcn/ui)
+lucide-react      — Icon library (shadcn/ui)
 ```
 
 ### Dev (`npm install --dev`)
@@ -38,18 +41,20 @@ typescript        — Type checking (strict mode)
 @types/react      — React type definitions
 @vitejs/plugin-react — Vite React plugin (for Vitest)
 vitest            — Unit test runner
-jsdom             — DOM environment for Vitest (unused — Node env)
+jsdom             — DOM environment for Vitest
 eslint / eslint-config-next — Linting
 tailwindcss       — Utility CSS framework (v3)
+tailwindcss-animate — Animation plugin for shadcn/ui
 postcss / autoprefixer — CSS processing
 playwright        — Browser automation (screenshot pipeline)
+shadcn            — shadcn/ui CLI for component scaffolding
 ```
 
 ## Database & Storage
 
 | What | Where | Type |
 |---|---|---|
-| User data | Supabase Postgres (remote) | Managed via `npx supabase db push` — tables: `users`, `profiles`, `companies`, `postings`, `scores`, `applications`, `usage_counters` |
+| User data | Supabase Postgres (remote) | Managed via `npx supabase db push` — tables: `users`, `profiles`, `resumes`, `companies`, `postings`, `scores`, `applications`, `interview_sessions`, `usage_counters` |
 | File uploads | Supabase Storage bucket `resumes` | Private, per-user folders |
 | Auth sessions | Supabase Auth | Magic-link only, PKCE flow, 1h token expiry |
 

@@ -1,8 +1,13 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Search, Sparkles, FileText, Filter } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/EmptyState";
+import { PipelineStats } from "@/components/PipelineStats";
 
 type MatchedPosting = {
   id: string;
@@ -52,10 +57,10 @@ function relativeAge(iso: string | null | undefined): string | null {
 }
 
 function scoreTone(score: number): string {
-  if (score >= 80) return "bg-emerald-100 text-emerald-900";
-  if (score >= 65) return "bg-sky-100 text-sky-900";
-  if (score >= 50) return "bg-amber-100 text-amber-900";
-  return "bg-neutral-100 text-neutral-700";
+  if (score >= 80) return "bg-emerald-100 text-emerald-800 border-emerald-200";
+  if (score >= 65) return "bg-sky-100 text-sky-800 border-sky-200";
+  if (score >= 50) return "bg-amber-100 text-amber-800 border-amber-200";
+  return "bg-neutral-100 text-neutral-700 border-neutral-200";
 }
 
 export default function MatchesPage() {
@@ -75,6 +80,16 @@ export default function MatchesPage() {
   const [status, setStatus] = useState<string | null>(null);
   const [tailoringId, setTailoringId] = useState<string | null>(null);
   const [belowMinCount, setBelowMinCount] = useState(0);
+  const [totalPostings, setTotalPostings] = useState<number | null>(null);
+  const [totalScores, setTotalScores] = useState<number | null>(null);
+  const [scoringProgress, setScoringProgress] = useState<{
+    index: number;
+    total: number;
+    scored: number;
+    errors: number;
+    currentCompany?: string;
+    currentTitle?: string;
+  } | null>(null);
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams();
@@ -91,9 +106,10 @@ export default function MatchesPage() {
     setLoading(true);
     setError(null);
     try {
-      const [res, allRes] = await Promise.all([
+      const [res, allRes, statsRes] = await Promise.all([
         fetch(`/api/postings?${queryString}`),
         fetch(`/api/postings?min_score=0`),
+        fetch("/api/stats"),
       ]);
       const data = (await res.json()) as {
         postings?: MatchedPosting[];
@@ -101,6 +117,10 @@ export default function MatchesPage() {
         count?: number;
       };
       const allData = (await allRes.json()) as { postings?: MatchedPosting[] };
+      const statsData = (await statsRes.json()) as {
+        total_postings?: number;
+        scored_count?: number;
+      };
       if (!res.ok) {
         throw new Error(data.error ?? "Failed to load matches");
       }
@@ -110,6 +130,8 @@ export default function MatchesPage() {
       setBelowMinCount(
         Math.max(0, all.length - all.filter((p) => p.score >= minScore).length)
       );
+      setTotalPostings(statsData.total_postings ?? null);
+      setTotalScores(statsData.scored_count ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load");
     } finally {
@@ -121,44 +143,104 @@ export default function MatchesPage() {
     void loadMatches();
   }, [loadMatches]);
 
+  // Auto-score: if postings exist but nothing is scored yet, kick off scoring
+  const [autoScored, setAutoScored] = useState(false);
+  useEffect(() => {
+    if (
+      !loading &&
+      !scoring &&
+      !autoScored &&
+      totalPostings != null &&
+      totalPostings > 0 &&
+      totalScores === 0
+    ) {
+      setAutoScored(true);
+      void handleScoreNow();
+    }
+  }, [loading, scoring, autoScored, totalPostings, totalScores]);
+
   async function handleScoreNow() {
     setScoring(true);
     setError(null);
     setStatus(null);
+    setScoringProgress(null);
+
     try {
       const res = await fetch("/api/score/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ limit: 20 }),
+        body: JSON.stringify({ limit: 20, stream: true }),
       });
-      const data = (await res.json()) as {
-        scored?: number;
-        attempted?: number;
-        errors?: number;
-        remaining_unscored_estimate?: number;
-        error?: string;
-        error_samples?: string[];
-        totals?: { scores?: number; scores_gte_50?: number };
-      };
+
       if (!res.ok) {
-        throw new Error(data.error ?? "Scoring failed");
+        const data = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        throw new Error(data.error ?? `Scoring failed (${res.status})`);
       }
-      setStatus(
-        `Scored ${data.scored ?? 0} of ${data.attempted ?? 0} role-matched jobs` +
-          (data.errors ? ` (${data.errors} errors)` : "") +
-          (data.totals?.scores_gte_50 != null
-            ? `. ${data.totals.scores_gte_50} total at score ≥ 50.`
-            : ".") +
-          (data.remaining_unscored_estimate
-            ? ` ~${data.remaining_unscored_estimate} still unscored — run again to continue.`
-            : "")
-      );
-      if (data.error_samples?.length) {
-        setError(data.error_samples.join(" · "));
+
+      // Read SSE stream
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("No response body");
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const event = JSON.parse(line.slice(6)) as {
+              type: string;
+              index?: number;
+              total?: number;
+              scored?: number;
+              errors?: number;
+              company?: string;
+              title?: string;
+              attempted?: number;
+              totals?: { scores?: number; scores_gte_50?: number };
+              message?: string;
+            };
+
+            if (event.type === "progress") {
+              setScoringProgress({
+                index: event.index ?? 0,
+                total: event.total ?? 0,
+                scored: event.scored ?? 0,
+                errors: event.errors ?? 0,
+                currentCompany: event.company,
+                currentTitle: event.title,
+              });
+            } else if (event.type === "done") {
+              setStatus(
+                `Scored ${event.scored ?? 0} of ${event.attempted ?? 0} role-matched jobs` +
+                  (event.errors ? ` (${event.errors} errors)` : "") +
+                  (event.totals?.scores_gte_50 != null
+                    ? `. ${event.totals.scores_gte_50} total at score ≥ 50.`
+                    : ".")
+              );
+              setScoringProgress(null);
+            } else if (event.type === "error") {
+              setError(event.message ?? "Scoring stream error");
+              setScoringProgress(null);
+            }
+          } catch {
+            // skip malformed events
+          }
+        }
       }
       await loadMatches();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Scoring failed");
+      setScoringProgress(null);
     } finally {
       setScoring(false);
     }
@@ -189,23 +271,25 @@ export default function MatchesPage() {
 
   return (
     <div className="space-y-6">
+      <PipelineStats />
+
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Matches</h1>
-          <p className="mt-1 max-w-2xl text-sm text-neutral-600">
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
             Jobs scored against your resume.{" "}
             <strong>Customize application</strong> drafts a tailored resume +
             cover letter for that role (you still apply on the company site).
           </p>
         </div>
-        <button
-          type="button"
+        <Button
           disabled={scoring || loading}
           onClick={() => void handleScoreNow()}
-          className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-60"
+          size="sm"
         >
+          <Sparkles className="mr-1.5 h-4 w-4" />
           {scoring ? "Scoring…" : "Score more matches"}
-        </button>
+        </Button>
       </div>
 
       <div className="grid gap-3 rounded-lg border border-neutral-200 bg-neutral-50 p-4 sm:grid-cols-2 lg:grid-cols-6">
@@ -292,6 +376,43 @@ export default function MatchesPage() {
         </label>
       </div>
 
+      {scoringProgress ? (
+        <div className="space-y-2 rounded-lg border bg-card p-4" role="status">
+          <div className="flex items-center justify-between text-sm">
+            <span className="font-medium text-foreground">
+              Scoring matches…
+            </span>
+            <span className="tabular-nums text-muted-foreground">
+              {scoringProgress.index} / {scoringProgress.total}
+            </span>
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full bg-primary transition-all duration-300"
+              style={{
+                width: `${scoringProgress.total > 0 ? Math.round((scoringProgress.index / scoringProgress.total) * 100) : 0}%`,
+              }}
+            />
+          </div>
+          {scoringProgress.currentCompany && scoringProgress.currentTitle ? (
+            <p className="text-xs text-muted-foreground">
+              {scoringProgress.currentTitle} at {scoringProgress.currentCompany}
+            </p>
+          ) : null}
+          <div className="flex gap-4 text-xs text-muted-foreground">
+            <span>
+              <strong className="text-foreground">{scoringProgress.scored}</strong>{" "}
+              scored
+            </span>
+            {scoringProgress.errors > 0 ? (
+              <span className="text-destructive">
+                <strong>{scoringProgress.errors}</strong> errors
+              </span>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
       {status ? (
         <p
           className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900"
@@ -318,57 +439,100 @@ export default function MatchesPage() {
       ) : null}
 
       {loading ? (
-        <div
-          className="flex items-center gap-2 text-sm text-neutral-500"
-          role="status"
-          aria-live="polite"
-        >
-          <span
-            className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-700"
-            aria-hidden
-          />
-          Loading matches…
+        <div className="space-y-4" role="status" aria-live="polite">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span
+              className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-muted border-t-primary"
+              aria-hidden
+            />
+            Loading matches…
+          </div>
+          <div className="space-y-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="space-y-2 rounded-lg border p-4">
+                <Skeleton className="h-4 w-48" />
+                <Skeleton className="h-3 w-32" />
+                <Skeleton className="h-3 w-96" />
+              </div>
+            ))}
+          </div>
         </div>
       ) : postings.length === 0 ? (
-        <div className="space-y-3 rounded border border-dashed border-neutral-300 bg-neutral-50 px-4 py-6">
-          <p className="text-sm text-neutral-700">
-            No matches for the current filters.
-          </p>
-          <p className="text-sm text-neutral-600">
-            Try lowering min score, widening &ldquo;Posted within&rdquo;, clearing the
-            Location or Remote-only filters, or scoring more matches.
-          </p>
-          <div className="flex flex-wrap gap-3 pt-1">
-            <button
-              type="button"
-              disabled={scoring}
-              onClick={() => void handleScoreNow()}
-              className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-60"
-            >
-              {scoring ? "Scoring…" : "Score more matches"}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setMinScore(0);
-                setMaxAgeDays("");
-                setLocation("Canada");
-                setDraftLocation("Canada");
-                setRemoteOnly(false);
-                setQuery("");
-                setDraftQuery("");
-              }}
-              className="rounded border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-800 hover:bg-neutral-50"
-            >
-              Reset filters
-            </button>
-            <Link
-              href="/profile"
-              className="rounded border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-800 hover:bg-neutral-50"
-            >
-              Edit preferences
-            </Link>
-          </div>
+        <div className="space-y-4">
+          {totalScores === 0 && totalPostings != null && totalPostings > 0 ? (
+            /* Postings exist but none scored — prompt to score */
+            <EmptyState
+              icon={Sparkles}
+              title="Ready to discover your matches"
+              description={`We've collected ${totalPostings.toLocaleString()} active job postings from Greenhouse and Lever. Score them against your profile to find your best fits.`}
+              hint="Scoring uses AI to compare your resume with each job description."
+              actions={[
+                {
+                  label: scoring ? "Scoring…" : "Score matches now",
+                  onClick: () => void handleScoreNow(),
+                  variant: "default",
+                },
+                {
+                  label: "Edit your profile",
+                  href: "/profile",
+                  variant: "outline",
+                },
+              ]}
+            />
+          ) : totalPostings === 0 ? (
+            /* No postings at all — need to run ATS poller */
+            <EmptyState
+              icon={Search}
+              title="No job postings yet"
+              description="Job postings haven't been pulled from company career sites yet. This is done automatically, or you can trigger a manual refresh."
+              hint="Postings are pulled from Greenhouse and Lever public APIs."
+              actions={[
+                {
+                  label: "Check your profile",
+                  href: "/profile",
+                  variant: "default",
+                },
+              ]}
+            />
+          ) : (
+            /* Scored but below threshold */
+            <div className="space-y-4">
+              <EmptyState
+                icon={Filter}
+                title="No matches for current filters"
+                description={
+                  belowMinCount > 0
+                    ? `You have ${belowMinCount} scored job${belowMinCount === 1 ? "" : "s"} below the minimum score of ${minScore}. Try lowering the threshold or clearing other filters.`
+                    : "Try lowering the minimum score, widening the date range, or clearing location filters."
+                }
+                actions={[
+                  {
+                    label: "Lower to score 0+",
+                    onClick: () => setMinScore(0),
+                    variant: "default",
+                  },
+                  {
+                    label: "Reset all filters",
+                    onClick: () => {
+                      setMinScore(0);
+                      setMaxAgeDays("");
+                      setLocation("Canada");
+                      setDraftLocation("Canada");
+                      setRemoteOnly(false);
+                      setQuery("");
+                      setDraftQuery("");
+                    },
+                    variant: "outline",
+                  },
+                  {
+                    label: scoring ? "Scoring…" : "Score more",
+                    onClick: () => void handleScoreNow(),
+                    variant: "secondary",
+                  },
+                ]}
+              />
+            </div>
+          )}
         </div>
       ) : (
         <ul className="divide-y divide-neutral-200 border-t border-neutral-200">
@@ -386,7 +550,7 @@ export default function MatchesPage() {
                       {posting.title}
                     </h2>
                     <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${scoreTone(posting.score)}`}
+                      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold tabular-nums ${scoreTone(posting.score)}`}
                       title="Fit score vs your resume (0–100)"
                     >
                       Fit {Math.round(posting.score)}
@@ -416,35 +580,52 @@ export default function MatchesPage() {
                   {posting.matched_skills.length > 0 ? (
                     <div className="flex flex-wrap gap-1.5 pt-1">
                       {posting.matched_skills.slice(0, 6).map((skill) => (
-                        <span
+                        <Badge
                           key={skill}
-                          className="rounded bg-neutral-100 px-2 py-0.5 text-xs text-neutral-700"
+                          variant="secondary"
+                          className="text-xs font-normal"
                         >
                           {skill}
-                        </span>
+                        </Badge>
                       ))}
+                      {posting.matched_skills.length > 6 ? (
+                        <Badge variant="outline" className="text-xs font-normal">
+                          +{posting.matched_skills.length - 6} more
+                        </Badge>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>
 
                 <div className="flex shrink-0 flex-col gap-2 sm:items-stretch">
-                  <button
-                    type="button"
+                  <Button
+                    size="sm"
                     disabled={tailoringId === posting.posting_id}
                     onClick={() => handleTailor(posting.posting_id)}
-                    className="rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-60"
                     title="Generate a tailored resume and cover letter for this job"
                   >
+                    <FileText className="mr-1.5 h-4 w-4" />
                     {tailoringId === posting.posting_id
                       ? "Opening…"
                       : "Customize application"}
-                  </button>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      router.push(`/interview/${posting.posting_id}`)
+                    }
+                    title="Practice with AI-generated interview questions"
+                  >
+                    <Sparkles className="mr-1.5 h-4 w-4" />
+                    Mock interview
+                  </Button>
                   {posting.apply_url ? (
                     <a
                       href={posting.apply_url}
                       target="_blank"
                       rel="noreferrer"
-                      className="rounded border border-neutral-300 bg-white px-4 py-2 text-center text-sm font-medium text-neutral-800 hover:bg-neutral-50"
+                      className="inline-flex items-center justify-center rounded-lg border border-input bg-background px-3 py-1.5 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-muted"
                     >
                       View job posting
                     </a>

@@ -1,4 +1,10 @@
-export type AtsSource = "greenhouse" | "lever";
+export type AtsSource =
+  | "greenhouse"
+  | "lever"
+  | "ashby"
+  | "workable"
+  | "recruitee"
+  | "personio";
 
 export type NormalizedPosting = {
   external_id: string;

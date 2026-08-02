@@ -2,6 +2,11 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { ClipboardList } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/EmptyState";
+import { PipelineStats } from "@/components/PipelineStats";
 import {
   KANBAN_COLUMNS,
   nextStatuses,
@@ -17,6 +22,13 @@ type ApplicationCard = {
   title: string | null;
   company_name: string | null;
 };
+
+function staleDays(appliedAt: string | null, status: string): number {
+  if (!appliedAt || !["applied", "screening"].includes(status)) return 0;
+  return Math.floor(
+    (Date.now() - new Date(appliedAt).getTime()) / (1000 * 60 * 60 * 24)
+  );
+}
 
 const COLUMN_LABELS: Record<string, string> = {
   discovered: "Discovered",
@@ -101,6 +113,8 @@ export default function ApplicationsPage() {
 
   function renderCard(app: ApplicationCard) {
     const moves = nextStatuses(app.status);
+    const days = staleDays(app.applied_at, app.status);
+    const isStale = days >= 21;
     return (
       <article
         key={app.id}
@@ -110,9 +124,19 @@ export default function ApplicationsPage() {
           href={`/applications/${app.id}`}
           className="block space-y-0.5 hover:opacity-80"
         >
-          <p className="text-sm font-medium text-neutral-900">
-            {app.title ?? "Untitled role"}
-          </p>
+          <div className="flex items-start gap-1.5">
+            <p className="text-sm font-medium text-neutral-900 flex-1 min-w-0">
+              {app.title ?? "Untitled role"}
+            </p>
+            {isStale ? (
+              <span
+                className="shrink-0 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700"
+                title={`Applied ${days} days ago — consider following up`}
+              >
+                {days}d
+              </span>
+            ) : null}
+          </div>
           <p className="text-xs text-neutral-600">
             {app.company_name ?? "Unknown company"}
           </p>
@@ -138,9 +162,11 @@ export default function ApplicationsPage() {
 
   return (
     <div className="space-y-6">
+      <PipelineStats />
+
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Applications</h1>
-        <p className="mt-1 text-sm text-neutral-600">
+        <p className="mt-1 text-sm text-muted-foreground">
           Track each role through your pipeline.
         </p>
       </div>
@@ -152,31 +178,42 @@ export default function ApplicationsPage() {
       ) : null}
 
       {loading ? (
-        <div
-          className="flex items-center gap-2 text-sm text-neutral-500"
-          role="status"
-          aria-live="polite"
-        >
-          <span
-            className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-700"
-            aria-hidden
-          />
-          Loading applications…
+        <div className="space-y-4" role="status" aria-live="polite">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span
+              className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-muted border-t-primary"
+              aria-hidden
+            />
+            Loading applications…
+          </div>
+          <div className="flex gap-3 overflow-x-auto">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="w-56 shrink-0 space-y-2">
+                <Skeleton className="h-5 w-24" />
+                <Skeleton className="h-20 w-full" />
+                <Skeleton className="h-20 w-full" />
+              </div>
+            ))}
+          </div>
         </div>
       ) : applications.length === 0 ? (
-        <div className="space-y-3 rounded border border-dashed border-neutral-300 bg-neutral-50 px-4 py-6">
-          <p className="text-sm text-neutral-700">No applications yet.</p>
-          <p className="text-sm text-neutral-600">
-            Open Matches, pick a scored role, and hit Tailor to start tracking it
-            here.
-          </p>
-          <Link
-            href="/matches"
-            className="inline-flex rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800"
-          >
-            Browse matches
-          </Link>
-        </div>
+        <EmptyState
+          icon={ClipboardList}
+          title="No applications yet"
+          description="Browse your scored matches, pick a role you like, and use Customize application to generate a tailored resume and cover letter. It'll appear here for tracking."
+          actions={[
+            {
+              label: "Browse matches",
+              href: "/matches",
+              variant: "default",
+            },
+            {
+              label: "Edit your profile",
+              href: "/profile",
+              variant: "outline",
+            },
+          ]}
+        />
       ) : (
         <>
           <div className="-mx-4 overflow-x-auto px-4 pb-2">

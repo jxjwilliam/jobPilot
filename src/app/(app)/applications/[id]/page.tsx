@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { Mail, Clock } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import type { ParsedResume } from "@/lib/llm/schemas";
 
 type ApplicationDetail = {
@@ -115,6 +118,12 @@ export default function ApplicationDetailPage() {
   const [coverLetter, setCoverLetter] = useState("");
   const [instruction, setInstruction] = useState("");
   const [coverDirty, setCoverDirty] = useState(false);
+  const [followUpLoading, setFollowUpLoading] = useState(false);
+  const [followUpResult, setFollowUpResult] = useState<{
+    subject: string;
+    body: string;
+    stale_days: number;
+  } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -225,6 +234,33 @@ export default function ApplicationDetailPage() {
     }
   }
 
+  async function handleFollowUp() {
+    setFollowUpLoading(true);
+    setError(null);
+    setFollowUpResult(null);
+    try {
+      const res = await fetch(`/api/applications/${id}/follow-up`, {
+        method: "POST",
+      });
+      const data = (await res.json()) as {
+        subject?: string;
+        body?: string;
+        stale_days?: number;
+        error?: string;
+      };
+      if (!res.ok) throw new Error(data.error ?? "Follow-up generation failed");
+      setFollowUpResult({
+        subject: data.subject ?? "",
+        body: data.body ?? "",
+        stale_days: data.stale_days ?? 0,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Follow-up failed");
+    } finally {
+      setFollowUpLoading(false);
+    }
+  }
+
   async function handleMarkApplied() {
     setBusy("applied");
     setError(null);
@@ -273,21 +309,45 @@ export default function ApplicationDetailPage() {
   const tailored = application.tailored_resume ?? emptyResume();
   const isApplied = application.status === "applied";
 
+  // Stale application detection: 21+ days in "applied" or "screening"
+  const staleDays =
+    application.applied_at &&
+    ["applied", "screening"].includes(application.status)
+      ? Math.floor(
+          (Date.now() - new Date(application.applied_at).getTime()) /
+            (1000 * 60 * 60 * 24)
+        )
+      : 0;
+  const isStale = staleDays >= 21;
+
   return (
     <div className="space-y-8">
       <header className="space-y-2">
-        <p className="text-sm text-neutral-500">
-          Status:{" "}
-          <span className="font-medium text-neutral-800">
-            {application.status}
-          </span>
-          {application.applied_at ? (
-            <span className="text-neutral-500">
-              {" "}
-              · applied {new Date(application.applied_at).toLocaleDateString()}
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm text-muted-foreground">
+            Status:{" "}
+            <span className="font-medium text-foreground">
+              {application.status}
             </span>
+            {application.applied_at ? (
+              <span>
+                {" "}
+                · applied{" "}
+                {new Date(application.applied_at).toLocaleDateString()}
+              </span>
+            ) : null}
+          </p>
+          {isStale ? (
+            <Badge
+              variant="destructive"
+              className="text-xs"
+              title="This application may need a follow-up"
+            >
+              <Clock className="mr-1 h-3 w-3" />
+              {staleDays}d stale
+            </Badge>
           ) : null}
-        </p>
+        </div>
         <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">
           {posting.title}
         </h1>
@@ -405,6 +465,48 @@ export default function ApplicationDetailPage() {
                   : "Mark Applied"}
             </button>
           </section>
+
+          {/* Stale follow-up section */}
+          {(isStale || isApplied) ? (
+            <section className="space-y-3 border-t border-neutral-200 pt-6">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h2 className="text-lg font-medium text-foreground">
+                    Follow-up
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    {isStale
+                      ? `It's been ${staleDays} days since you applied. Consider sending a follow-up.`
+                      : "Draft a polite follow-up email for this application."}
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={followUpLoading}
+                  onClick={() => void handleFollowUp()}
+                >
+                  <Mail className="mr-1.5 h-4 w-4" />
+                  {followUpLoading ? "Drafting…" : "Draft follow-up email"}
+                </Button>
+              </div>
+
+              {followUpResult ? (
+                <div className="space-y-2 rounded-lg border bg-card p-4">
+                  <p className="text-sm font-medium text-foreground">
+                    Subject: {followUpResult.subject}
+                  </p>
+                  <pre className="whitespace-pre-wrap text-sm text-muted-foreground font-sans">
+                    {followUpResult.body}
+                  </pre>
+                  <p className="text-xs text-muted-foreground">
+                    This draft was saved to your application notes. Copy,
+                    personalize, and send it to the recruiter.
+                  </p>
+                </div>
+              ) : null}
+            </section>
+          ) : null}
         </>
       )}
     </div>

@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { normalizeGreenhouseJob } from "@/lib/ingestion/greenhouse";
 import { normalizeLeverPosting } from "@/lib/ingestion/lever";
+import { normalizeAshbyJob } from "@/lib/ingestion/ashby";
+import { normalizeWorkableJob } from "@/lib/ingestion/workable";
+import { normalizeRecruiteeOffer } from "@/lib/ingestion/recruitee";
+import { normalizePersonioJob } from "@/lib/ingestion/personio";
 
 describe("normalizeGreenhouseJob", () => {
   it("maps Greenhouse job JSON into NormalizedPosting", () => {
@@ -117,5 +121,185 @@ describe("normalizeLeverPosting", () => {
     expect(normalized.apply_url).toBe("https://jobs.lever.co/acme/abc");
     expect(normalized.description_raw).toBe("<p>Hello</p>");
     expect(normalized.posted_at).toBeNull();
+  });
+});
+
+describe("normalizeAshbyJob", () => {
+  it("maps Ashby job JSON into NormalizedPosting", () => {
+    const normalized = normalizeAshbyJob(
+      {
+        id: "a1b2c3d4",
+        title: "Senior Software Engineer",
+        location: "Remote (US)",
+        descriptionPlain: "Build the future of hiring.",
+        applyUrl: "https://jobs.ashbyhq.com/vercel/a1b2c3d4",
+        publishedAt: "2026-07-01T12:00:00Z",
+        employmentType: "Full-time",
+        compensation: {
+          salary: { min: 150000, max: 200000 },
+        },
+      },
+      "Vercel"
+    );
+
+    expect(normalized).toEqual({
+      external_id: "a1b2c3d4",
+      title: "Senior Software Engineer",
+      location: "Remote (US)",
+      description_raw: "Build the future of hiring.",
+      apply_url: "https://jobs.ashbyhq.com/vercel/a1b2c3d4",
+      posted_at: "2026-07-01T12:00:00Z",
+      employment_type: "Full-time",
+      salary_min: 150000,
+      salary_max: 200000,
+      company_name: "Vercel",
+    });
+  });
+
+  it("falls back to updatedAt and handles nulls", () => {
+    const normalized = normalizeAshbyJob(
+      {
+        id: "x",
+        title: "Designer",
+        updatedAt: "2026-01-01T00:00:00Z",
+        descriptionHtml: "<p>Design role</p>",
+      },
+      "Acme"
+    );
+
+    expect(normalized.description_raw).toBe("<p>Design role</p>");
+    expect(normalized.posted_at).toBe("2026-01-01T00:00:00Z");
+    expect(normalized.apply_url).toBeNull();
+    expect(normalized.salary_min).toBeNull();
+  });
+});
+
+describe("normalizeWorkableJob", () => {
+  it("maps Workable job JSON into NormalizedPosting", () => {
+    const normalized = normalizeWorkableJob(
+      {
+        id: "w123",
+        title: "Product Manager",
+        location: "New York, NY",
+        description: "Lead product initiatives.",
+        requirements: "5+ years experience",
+        benefits: "Health, 401k",
+        application_url: "https://apply.workable.com/acme/w123",
+        published: "2026-06-15T10:00:00Z",
+        employment_type: "Permanent",
+        salary_from: 120000,
+        salary_to: 160000,
+      },
+      "Acme Corp"
+    );
+
+    expect(normalized.external_id).toBe("w123");
+    expect(normalized.title).toBe("Product Manager");
+    expect(normalized.location).toBe("New York, NY");
+    expect(normalized.description_raw).toContain("Lead product initiatives.");
+    expect(normalized.description_raw).toContain("5+ years experience");
+    expect(normalized.description_raw).toContain("Health, 401k");
+    expect(normalized.apply_url).toBe("https://apply.workable.com/acme/w123");
+    expect(normalized.salary_min).toBe(120000);
+    expect(normalized.salary_max).toBe(160000);
+    expect(normalized.employment_type).toBe("Permanent");
+  });
+
+  it("uses shortlink fallback for apply_url", () => {
+    const normalized = normalizeWorkableJob(
+      {
+        id: "w456",
+        title: "Engineer",
+        shortlink: "https://acme.workable.com/j/w456",
+      },
+      "Acme"
+    );
+
+    expect(normalized.apply_url).toBe("https://acme.workable.com/j/w456");
+    expect(normalized.description_raw).toBe("");
+  });
+});
+
+describe("normalizeRecruiteeOffer", () => {
+  it("maps Recruitee offer JSON into NormalizedPosting", () => {
+    const normalized = normalizeRecruiteeOffer(
+      {
+        id: 9876,
+        title: "Backend Developer",
+        city: "Berlin",
+        country: "Germany",
+        description: "Join our engineering team.",
+        requirements: "Node.js, PostgreSQL",
+        offer_url: "https://acme.recruitee.com/o/backend-developer",
+        published_at: "2026-05-20T08:00:00Z",
+        employment_type: "Full-time",
+        min_salary: 60000,
+        max_salary: 80000,
+      },
+      "Acme GmbH"
+    );
+
+    expect(normalized.external_id).toBe("9876");
+    expect(normalized.title).toBe("Backend Developer");
+    expect(normalized.location).toBe("Berlin, Germany");
+    expect(normalized.description_raw).toContain("Join our engineering team.");
+    expect(normalized.apply_url).toBe("https://acme.recruitee.com/o/backend-developer");
+    expect(normalized.salary_min).toBe(60000);
+    expect(normalized.salary_max).toBe(80000);
+    expect(normalized.employment_type).toBe("Full-time");
+    expect(normalized.company_name).toBe("Acme GmbH");
+  });
+
+  it("handles missing city/country gracefully", () => {
+    const normalized = normalizeRecruiteeOffer(
+      { id: 1, title: "Remote Role", description: "Work from anywhere." },
+      "RemoteCo"
+    );
+
+    expect(normalized.location).toBeNull();
+    expect(normalized.posted_at).toBeNull();
+    expect(normalized.salary_min).toBeNull();
+  });
+});
+
+describe("normalizePersonioJob", () => {
+  it("maps Personio job JSON into NormalizedPosting", () => {
+    const normalized = normalizePersonioJob(
+      {
+        id: 5001,
+        name: "Marketing Manager",
+        office: "Munich",
+        department: "Marketing",
+        employment_type: "Full-time",
+        description: "Drive our marketing strategy.",
+        created_at: "2026-04-01T09:00:00Z",
+        application_url: "https://acme.jobs.personio.com/job/5001",
+      },
+      "Acme AG"
+    );
+
+    expect(normalized.external_id).toBe("5001");
+    expect(normalized.title).toBe("Marketing Manager");
+    expect(normalized.location).toBe("Munich");
+    expect(normalized.description_raw).toContain("Drive our marketing strategy.");
+    expect(normalized.apply_url).toBe("https://acme.jobs.personio.com/job/5001");
+    expect(normalized.posted_at).toBe("2026-04-01T09:00:00Z");
+    expect(normalized.employment_type).toBe("Full-time");
+    expect(normalized.company_name).toBe("Acme AG");
+  });
+
+  it("uses schedule as employment_type fallback", () => {
+    const normalized = normalizePersonioJob(
+      {
+        id: 2,
+        name: "Part-time Developer",
+        schedule: "Part-time",
+      },
+      "FlexCo"
+    );
+
+    expect(normalized.employment_type).toBe("Part-time");
+    expect(normalized.location).toBeNull();
+    expect(normalized.apply_url).toBeNull();
   });
 });

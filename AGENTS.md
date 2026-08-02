@@ -1,6 +1,6 @@
 # JobPilot — Agent Instructions
 
-Next.js 15 App Router · Supabase (auth + Postgres + Storage) · Tailwind CSS · Vitest · OpenAI-compatible LLM
+Next.js 15 App Router · Supabase (auth + Postgres + Storage) · Tailwind CSS v3 · shadcn/ui · Vitest · OpenAI-compatible LLM
 
 ---
 
@@ -8,7 +8,7 @@ Next.js 15 App Router · Supabase (auth + Postgres + Storage) · Tailwind CSS ·
 
 ```bash
 npm run dev        # Next.js with Turbopack (port 3000)
-npm test           # Vitest — all files in tests/unit/
+npm test           # Vitest — 39 tests across 9 files
 npm run build      # production build
 
 # Migrations (linked remote project)
@@ -56,7 +56,7 @@ See `scripts/screenshot-with-auth.mjs` for the full implementation.
 
 ### Protected routes
 
-Middleware guards: `/matches`, `/onboarding`, `/applications`, `/profile`, `/usage`. Unauthenticated requests redirect to `/login?next={path}`.
+Middleware guards: `/matches`, `/browse`, `/onboarding`, `/applications`, `/applications/*`, `/interview`, `/interview/*`, `/profile`, `/usage`. Unauthenticated requests redirect to `/login?next={path}`.
 
 Root `/` checks session server-side: logged-in users redirect to `/onboarding` (no resume) or `/matches`.
 
@@ -67,20 +67,27 @@ src/app/
   page.tsx              # Landing page (redirects authed users)
   (auth)/login/page.tsx # Magic link form
   (app)/                # Authenticated layout (+ AppNav)
-    matches/page.tsx
-    applications/page.tsx
-    applications/[id]/page.tsx
+    matches/page.tsx     # Scored jobs + streaming auto-score + tailor + interview buttons
+    browse/page.tsx      # All active postings: search, filter, paginate
+    applications/page.tsx  # Kanban board with stale badges
+    applications/[id]/page.tsx  # Resume diff, cover letter, follow-up draft
+    interview/[id]/page.tsx     # Mock interview: generate → answer → evaluate → report
     profile/page.tsx
     onboarding/page.tsx
     usage/page.tsx
   api/
-    cron/poll-ats       # Ingest Greenhouse + Lever
+    cron/poll-ats       # Ingest 6 ATS sources (Greenhouse, Lever, Ashby, Workable, Recruitee, Personio)
     cron/score          # Batch score all
     cron/digest         # Weekly email
-    score/run           # Score current user (session auth)
+    score/run           # Score current user (session auth, SSE streaming supported)
+    postings/           # Scored matches list
+    postings/browse     # Browse all active postings (not just scored)
+    stats               # Pipeline health (postings count, scores, last poll)
     profile/            # GET/PATCH profile, resume upload/reparse
     applications/       # List, tailor, regenerate
-    postings/           # List postings
+    applications/[id]/follow-up  # AI follow-up email draft
+    interview/generate  # Generate interview questions from JD
+    interview/evaluate  # Evaluate answer with STAR scoring
     billing/portal      # Stripe/mock portal
     account/delete      # Delete account + storage
     usage/              # Quota counters
@@ -94,13 +101,13 @@ src/app/
 - **Mock:** `tests/mocks/server-only.ts` stubs `server-only` package (needed because Vitest runs outside Next.js)
 
 ```bash
-npm test                     # all tests
-npx vitest run tests/unit/llm-schemas.test.ts   # single file
+npm test                     # all tests (39 across 9 files)
+npx vitest run tests/unit/ingestion-normalize.test.ts   # single file
 ```
 
 `vitest.config.ts` aliases `@/` → `src/` and `server-only` → the mock file.
 
-9 test files covering: LLM schema parsing, resume parsing, scoring prompt, ingestion normalization, quota, digest, status machine, ranking, tailor guardrails.
+9 test files covering: LLM schema parsing, resume parsing, scoring prompt, ingestion normalization (6 ATS sources), quota, digest, status machine, ranking, tailor guardrails.
 
 ## Architecture
 
@@ -110,7 +117,8 @@ npx vitest run tests/unit/llm-schemas.test.ts   # single file
 src/lib/
   supabase/    client.ts (browser), server.ts (SSR), admin.ts (service_role)
   llm/         OpenAI-compatible client via OPENAI_COMPATIBLE_* env vars
-  ingestion/   greenhouse.ts + lever.ts poll public ATS APIs + poll.ts orchestrator
+  stream/      sse.ts — lightweight SSE helper using Web Streams API
+  ingestion/   greenhouse.ts, lever.ts, ashby.ts, workable.ts, recruitee.ts, personio.ts, poll.ts orchestrator
   scoring/     score.ts — LLM scores profile vs posting
   tailoring/   tailor.ts — LLM generates tailored resume + cover letter
   profile/     upload resume → LLM parses → store in profiles.resume_parsed (jsonb)
@@ -119,13 +127,29 @@ src/lib/
   notifications/ digest.ts, email.ts (mock adapter)
 ```
 
-### Data model (from migration)
+### UI components
 
-Tables: `users`, `profiles`, `companies`, `postings`, `scores`, `applications`, `usage_counters`. RLS on all. Auto-create user+profile+usage on signup via `handle_new_user()` trigger. Storage bucket `resumes` (private, per-user folders).
+```
+src/components/
+  AppNav.tsx          # Navigation header with Matches, Browse, Applications, Profile, Usage
+  EmptyState.tsx      # Reusable card-based empty state (icon + title + description + actions)
+  PipelineStats.tsx   # Live pipeline health bar (postings, scores, applications, last poll)
+  brand/              # JobPilotLogo.tsx
+  profile/            # PreferencesEditor, ResumeFieldsEditor, CsvListInput, api.ts
+  ui/                 # shadcn/ui components (Button, Card, Badge, Progress, Skeleton, Tabs, Dialog, DropdownMenu)
+```
+
+### Data model (tables)
+
+`users`, `profiles`, `resumes` (multi-resume support), `companies`, `postings`, `scores`, `applications`, `interview_sessions`, `usage_counters`. RLS on all. Auto-create user+profile+usage on signup via `handle_new_user()` trigger. Storage bucket `resumes` (private, per-user folders).
 
 ### LLM integration
 
-Uses `openai` SDK pointed at any OpenAI-compatible API (`OPENAI_COMPATIBLE_BASE_URL`). Zod schemas for structured output parsing (`src/lib/llm/schemas.ts`). Three schemas: `ParsedResumeSchema`, `ScoreResultSchema`, `TailorResultSchema`.
+Uses `openai` SDK pointed at any OpenAI-compatible API (`OPENAI_COMPATIBLE_BASE_URL`). Zod schemas for structured output parsing (`src/lib/llm/schemas.ts`).
+
+### Streaming (SSE)
+
+`src/lib/stream/sse.ts` provides `createSseStream()` — a lightweight SSE helper using Web Streams API (zero dependencies). Used by `/api/score/run` for real-time scoring progress.
 
 ### Mock modes
 
@@ -146,8 +170,10 @@ Uses `openai` SDK pointed at any OpenAI-compatible API (`OPENAI_COMPATIBLE_BASE_
 |---|---|
 | `next.config.ts` | `serverExternalPackages: ["pdf-parse", "pdfjs-dist", "mammoth"]` |
 | `tsconfig.json` | `@/` → `./src/*`, strict mode |
+| `tailwind.config.ts` | shadcn/ui theme (colors, border-radius, dark mode) + tailwindcss-animate plugin |
 | `vitest.config.ts` | custom alias for `@/` and `server-only` mock |
 | `eslint.config.mjs` | Next.js + TypeScript defaults |
+| `components.json` | shadcn/ui config (Tailwind v3, src/components/ui, lucide icons) |
 | `.gitignore` | `.env*`, `.next/`, `.vercel/`, `coverage/`, `supabase/.temp/` |
 
 ## Screenshot automation

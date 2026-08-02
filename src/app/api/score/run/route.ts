@@ -10,10 +10,11 @@ import {
 } from "@/lib/scoring/score";
 import { ParsedResumeSchema } from "@/lib/llm/schemas";
 import { PreferencesSchema } from "@/lib/profile/types";
+import { createSseStream } from "@/lib/stream/sse";
 
 /**
  * Score the current user's profile against relevant active postings.
- * Auth required (unlike the cron route).
+ * Auth required. Supports both JSON (back-compat) and SSE streaming.
  */
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -26,13 +27,16 @@ export async function POST(request: Request) {
   }
 
   let limit = 25;
+  let stream = false;
   try {
     const body = (await request.json().catch(() => ({}))) as {
       limit?: unknown;
+      stream?: unknown;
     };
     if (typeof body.limit === "number" && Number.isFinite(body.limit)) {
       limit = Math.min(Math.max(Math.floor(body.limit), 1), 50);
     }
+    stream = Boolean(body.stream);
   } catch {
     // default limit
   }
@@ -70,7 +74,6 @@ export async function POST(request: Request) {
 
   const admin = createAdminClient();
 
-  // Pull a wider pool, then rank by role/skill relevance (not just newest boards).
   const { data: postings, error: postingsError } = await admin
     .from("postings")
     .select(
@@ -109,6 +112,84 @@ export async function POST(request: Request) {
     preferences: profile.preferences,
   };
 
+  if (stream) {
+    // --- SSE streaming response ---
+    const sse = createSseStream();
+    const total = pending.length;
+
+    // Fire-and-forget: score in the background, push events
+    (async () => {
+      let scoredCount = 0;
+      let errors = 0;
+
+      for (let i = 0; i < pending.length; i++) {
+        const posting = pending[i];
+        try {
+          const outcome = await scorePair(admin, scoreProfile, posting);
+          if (!outcome.skipped) {
+            scoredCount += 1;
+          }
+          sse.send({
+            type: "progress",
+            index: i + 1,
+            total,
+            scored: scoredCount,
+            errors,
+            company: posting.company_name,
+            title: posting.title,
+            score: outcome.result?.score ?? null,
+          });
+        } catch {
+          errors += 1;
+          sse.send({
+            type: "progress",
+            index: i + 1,
+            total,
+            scored: scoredCount,
+            errors,
+            company: posting.company_name,
+            title: posting.title,
+            score: null,
+          });
+        }
+      }
+
+      const { count: totalScores } = await admin
+        .from("scores")
+        .select("id", { count: "exact", head: true })
+        .eq("profile_id", profile.id);
+
+      const { count: above50 } = await admin
+        .from("scores")
+        .select("id", { count: "exact", head: true })
+        .eq("profile_id", profile.id)
+        .gte("score", 50);
+
+      sse.send({
+        type: "done",
+        attempted: total,
+        scored: scoredCount,
+        errors,
+        totals: {
+          scores: totalScores ?? 0,
+          scores_gte_50: above50 ?? 0,
+        },
+      });
+      sse.close();
+    })().catch((err) => {
+      sse.error(err instanceof Error ? err.message : "Scoring stream failed");
+    });
+
+    return new Response(sse.stream, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      },
+    });
+  }
+
+  // --- JSON response (back-compat, no streaming) ---
   let scoredCount = 0;
   let errors = 0;
   const errorSamples: string[] = [];
@@ -144,7 +225,10 @@ export async function POST(request: Request) {
     errors,
     error_samples: errorSamples,
     limit: limit || DEFAULT_SCORE_BATCH_LIMIT,
-    remaining_unscored_estimate: Math.max(0, ranked.length - scored.size - scoredCount),
+    remaining_unscored_estimate: Math.max(
+      0,
+      ranked.length - scored.size - scoredCount
+    ),
     totals: {
       scores: totalScores ?? 0,
       scores_gte_50: above50 ?? 0,

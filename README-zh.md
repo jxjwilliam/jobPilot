@@ -1,22 +1,29 @@
 # JobPilot
 
-JobPilot 是一个 AI 职业工作流平台：上传简历，LLM 自动填充字段，根据您的简历对 Greenhouse/Lever 上的职位进行评分，人工审核定制申请材料，在 Kanban 面板上跟踪进度，并接收每周摘要邮件。Stripe 和 Email 默认以 **mock** 模式运行。
+JobPilot 是一个 AI 职业工作流平台：上传简历，LLM 自动填充字段，浏览和评分来自 6 个 ATS 平台的职位，人工审核定制申请材料，进行模拟面试，在 Kanban 面板上跟踪进度，并接收每周摘要邮件。Stripe 和 Email 默认以 **mock** 模式运行。
 
 ## 已实现的功能
 
 - 魔法链接登录（Supabase）
 - 上传简历 → **AI 自动填充**（简介、技能、经验、教育背景、推荐偏好）+ 重新解析
-- ATS 数据获取：Greenhouse + Lever（`/api/cron/poll-ats`）
-- 评分：Cron 批量评分 **或** Matches 页面 **Score matches now**（`/api/score/run`）
-- 定制材料 + 重新生成 + 审核 UI；Kanban 进度跟踪
+- ATS 数据获取：Greenhouse、Lever、Ashby、Workable、Recruitee、Personio（`/api/cron/poll-ats`）
+- **流式评分** — 实时进度条显示评分进度（SSE）
+- **自动评分** — 进入 Matches 页面时自动触发评分
+- **职位浏览** — 搜索所有已拉取的职位，支持关键词/地点/远程筛选（`/browse`）
+- **模拟面试** — AI 根据职位生成面试题目，评估回答（STAR 评分），生成面试报告（`/interview/[id]`）
+- **申请跟进提醒** — 检测超过 21 天未更新的申请，AI 草拟跟进邮件
+- 定制材料 + 重新生成 + 审核 UI；Kanban 进度跟踪（含陈旧标记）
+- 流水线统计栏（职位总数、已评分数、申请数、上次拉取时间）
 - 配额 / Mock Stripe 门户；每周摘要（Mock Email）
 - 品牌：SVG favicon + Logo（导航 / 登录 / 首页）
+- **shadcn/ui** 组件库（Button、Card、Badge、Progress、Skeleton、Dialog、Tabs、DropdownMenu）
 
 ## 文档索引
 
 | 文档 | 用途 |
 |---|---|
 | [`docs/03-jobpilot-workflow.md`](docs/03-jobpilot-workflow.md) | **从这里开始** — 运行时工作流 + 时序图 |
+| [`docs/06-jobpilot-improvement-plan.md`](docs/06-jobpilot-improvement-plan.md) | **改进计划** — 架构决策 + Phase 1/2 变更记录 |
 | [`docs/01-jobpilot-product-spec.md`](docs/01-jobpilot-product-spec.md) | 原始产品规格 / 技术规格 |
 | [`docs/02-jobpilot-mvp-plan.md`](docs/02-jobpilot-mvp-plan.md) | 原始 MVP 排期 / MoSCoW |
 | [`docs/superpowers/specs/2026-07-11-jobpilot-design.md`](docs/superpowers/specs/2026-07-11-jobpilot-design.md) | 设计决策头脑风暴 |
@@ -53,8 +60,6 @@ npm install
 npx supabase db push
 ```
 
-如果关联项目已有 migration `20260711000000_init`，push 可能报告无需更新。
-
 3. 初始化 ATS 公司数据（推荐）：
 
 ```bash
@@ -82,58 +87,63 @@ curl -sS -X POST "$BASE/api/cron/poll-ats" \
 
 # 2) 完成入职流程（上传简历 → 审核 AI 自动填充的内容）
 
-# 3) 从 Matches UI 评分（"Score matches now"），或：
-curl -sS -X POST "$BASE/api/cron/score" \
-  -H "Authorization: Bearer $CRON_SECRET"
+# 3) 打开 /matches — 评分自动开始，进度条实时显示！
 ```
 
-| 路由 | 作用 |
-|---|---|
-| `POST /api/cron/poll-ats` | 获取 Greenhouse + Lever 职位数据 |
-| `POST /api/cron/score` | 批量评分未评分的 profile × posting 组合 |
-| `POST /api/score/run` | 为**当前用户**评分（Session 认证；Matches UI 调用） |
-| `POST /api/cron/digest` | 每周摘要（Mock 或 Resend） |
-| `POST /api/profile/resume` | 上传简历 + LLM 自动填充 |
-| `POST /api/profile/resume/reparse` | 从已存储的文件重新解析 |
+## API 路由
 
-**注意：** Matches 仅显示 `scores` 表中与您相关的行。数据获取后可能已有数千条 `postings`，但在评分运行前 Matches 页面会显示为空。
+| Method | Path | 用户 | 用途 |
+|---|---|---|---|
+| POST | `/api/cron/poll-ats` | Cron secret | 拉取 6 个 ATS 来源的职位 |
+| POST | `/api/cron/score` | Cron secret | 批量评分所有用户 |
+| POST | `/api/cron/digest` | Cron secret | 每周摘要（Mock 或 Resend） |
+| POST | `/api/score/run` | 用户（Session） | 流式评分（SSE 实时进度） |
+| GET | `/api/postings` | 用户（Session） | 匹配列表（仅已评分） |
+| GET | `/api/postings/browse` | 公开 | 浏览所有职位 |
+| GET | `/api/stats` | 用户（Session） | 流水线统计（计数、时间） |
+| POST | `/api/profile/resume` | 用户 | 上传 + LLM 自动填充 |
+| POST | `/api/profile/resume/reparse` | 用户 | 重新解析已存储文件 |
+| POST | `/api/applications` | 用户 | 创建申请 |
+| POST | `/api/applications/:id/tailor` | 用户 | 生成定制材料（消耗配额） |
+| POST | `/api/applications/:id/regenerate` | 用户 | 免费重新生成 |
+| POST | `/api/applications/:id/follow-up` | 用户 | 草拟跟进邮件 |
+| PATCH | `/api/applications/:id` | 用户 | 更新状态 / 备注 |
+| POST | `/api/interview/generate` | 用户 | 根据 JD 生成面试问题 |
+| POST | `/api/interview/evaluate` | 用户 | 评估回答 + STAR 反馈 |
+| POST | `/api/billing/portal` | 用户 | Stripe/mock 门户 |
+| DELETE | `/api/account/delete` | 用户 | 删除账户 + 文件 |
 
-## Mock 账单与邮件
+## 页面路由
 
-- **`BILLING_MODE=mock`** — 升级门户返回本地 Mock URL；不产生 Stripe 扣款。
-- **`EMAIL_MODE=mock`** — 摘要日志输出到服务端控制台（`{ mocked: true }`）。
+| 页面 | 路径 | 说明 |
+|---|---|---|
+| Matches | `/matches` | 已评分职位 + 流式自动评分 + 定制 + 面试 |
+| Browse | `/browse` | 搜索全部 6 个 ATS 平台的职位 |
+| Applications | `/applications` | Kanban 看板 + 陈旧标记 |
+| 申请详情 | `/applications/[id]` | 简历对比、求职信编辑、跟进草稿 |
+| 模拟面试 | `/interview/[id]` | AI 生成问题 + 评估 + 报告 |
+| Profile | `/profile` | 编辑个人资料、偏好、上传简历 |
+| 入职 | `/onboarding` | 首次上传简历 + AI 自动填充 |
+| Usage | `/usage` | 配额使用情况 |
 
 ## 架构
 
-核心库：`src/lib/{ingestion,scoring,tailoring,applications,billing,notifications,llm,profile}`。
+核心库：`src/lib/{ingestion,scoring,tailoring,applications,billing,notifications,llm,profile,stream}`。
 
-品牌资产：`public/favicon.svg`、`public/logo.svg`、`src/components/brand/JobPilotLogo.tsx`。
+组件：`src/components/{AppNav,EmptyState,PipelineStats,brand,profile,ui}`。
+
+UI 系统：**shadcn/ui**（Button, Card, Badge, Progress, Skeleton, Tabs, Dialog, DropdownMenu）+ Tailwind CSS v3。
+
+数据模型：`users`, `profiles`, `resumes`, `companies`, `postings`, `scores`, `applications`, `interview_sessions`, `usage_counters`。全部启用 RLS。
 
 ## 脚本
 
 ```bash
 npm run dev    # Next.js（Turbopack）
-npm test       # Vitest
+npm test       # Vitest（39 个测试，9 个文件）
 npm run build  # 生产构建
 ```
 
 ## 账户删除
 
 **Profile → Danger zone** → `DELETE /api/account/delete` 删除 `resumes/{user_id}/` 下的 Storage 对象，并删除认证用户（FK 级联）。
-
-<!-- screenshots -->
-## Screenshots
-
-| Home | Login | Matches |
-| --- | --- | --- |
-| ![Home](screenshots/home.png) | ![Login](screenshots/login.png) | ![Matches](screenshots/matches.png) |
-
-| Applications | Profile | Onboarding |
-| --- | --- | --- |
-| ![Applications](screenshots/applications.png) | ![Profile](screenshots/profile.png) | ![Onboarding](screenshots/onboarding.png) |
-
-| Usage |
-| --- |
-| ![Usage](screenshots/usage.png) |
-
-<!-- /screenshots -->
