@@ -43,6 +43,18 @@ function snippet(text: string, max = 200): string {
   return `${cleaned.slice(0, max).trimEnd()}…`;
 }
 
+function timeAgo(iso: string | null): string {
+  if (!iso) return "never";
+  const ms = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(ms / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
 export default function BrowsePage() {
   const router = useRouter();
   const [postings, setPostings] = useState<BrowsePosting[]>([]);
@@ -57,6 +69,9 @@ export default function BrowsePage() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [scoringId, setScoringId] = useState<string | null>(null);
+  const [lastPollAt, setLastPollAt] = useState<string | null>(null);
+  const [pipelineRunning, setPipelineRunning] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -91,6 +106,60 @@ export default function BrowsePage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    let ignore = false;
+    async function loadPipelineStatus() {
+      try {
+        const res = await fetch("/api/pipeline/status");
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          last_poll_at: string | null;
+          running: boolean;
+        };
+        if (!ignore) {
+          setLastPollAt(data.last_poll_at);
+          setPipelineRunning(data.running);
+        }
+      } catch {
+        // non-critical — stats are best-effort
+      }
+    }
+    void loadPipelineStatus();
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  async function refreshJobs() {
+    setRefreshing(true);
+    try {
+      await fetch("/api/pipeline/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      // Wait for the background run to finish, then reload the list.
+      const deadline = Date.now() + 120_000;
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        const res = await fetch("/api/pipeline/status");
+        if (!res.ok) break;
+        const data = (await res.json()) as {
+          last_poll_at: string | null;
+          running: boolean;
+        };
+        if (data.last_poll_at) setLastPollAt(data.last_poll_at);
+        if (!data.running) break;
+      }
+      setPipelineRunning(false);
+      await load();
+    } catch {
+      // non-critical
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   async function scoreOne(postingId: string) {
     setScoringId(postingId);
     try {
@@ -113,11 +182,27 @@ export default function BrowsePage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Browse Jobs</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Explore all active job postings across {total.toLocaleString()} roles.
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Browse Jobs</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Explore all active job postings across {total.toLocaleString()} roles.
+            {lastPollAt ? (
+              <span className="ml-2 text-xs text-muted-foreground/80">
+                · Last updated {timeAgo(lastPollAt)}
+              </span>
+            ) : null}
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={refreshing || pipelineRunning}
+          onClick={() => void refreshJobs()}
+        >
+          <Sparkles className="mr-1.5 h-4 w-4" />
+          {refreshing || pipelineRunning ? "Refreshing…" : "Refresh now"}
+        </Button>
       </div>
 
       {/* Search bar */}

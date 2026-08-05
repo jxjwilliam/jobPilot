@@ -1,6 +1,6 @@
 # JobPilot — Current Implementation Workflow
 
-**Last updated:** 2026-07-11  
+**Last updated:** 2026-08-05  
 **Companion:** `docs/superpowers/specs/2026-07-11-jobpilot-design.md`  
 **Also see:** root `README.md` (setup), `docs/01-jobpilot-product-spec.md` (original spec)
 
@@ -21,6 +21,7 @@ flowchart LR
     ScoreAPI[Score / Browse APIs]
     AppAPI[Applications / Follow-up APIs]
     InterviewAPI[Interview APIs]
+    Pipeline[Pipeline: refresh / status]
     Cron[Cron: poll / score / digest]
   end
 
@@ -34,6 +35,7 @@ flowchart LR
   UI --> ScoreAPI
   UI --> AppAPI
   UI --> InterviewAPI
+  UI --> Pipeline
   Auth --> SB
   Auth --> LLM
   ScoreAPI --> SB
@@ -42,6 +44,9 @@ flowchart LR
   AppAPI --> LLM
   InterviewAPI --> SB
   InterviewAPI --> LLM
+  Pipeline --> SB
+  Pipeline --> ATS
+  Pipeline --> LLM
   Cron --> ATS
   Cron --> SB
   Cron --> LLM
@@ -59,6 +64,8 @@ flowchart LR
 | `notifications/` | Weekly digest + mock email |
 | `profile/` | Resume parse / preference extract |
 | `stream/` | SSE streaming helper (Web Streams API) |
+| `pipeline/` | Auto-refresh pipeline: poll → stale-sweep → score → rescore (lock + TTL) |
+| `matches/` | Applied-job filtering helper for the matches feed |
 
 ---
 
@@ -70,14 +77,15 @@ flowchart TD
   B --> C[LLM extracts profile + suggested preferences]
   C --> D[User reviews autofilled fields]
   D --> E[Save preferences]
-  E --> F[ATS poller fills postings table]
-  F --> G[Score matches now / cron score]
-  G --> H[Matches list: score ≥ threshold]
-  H --> I[Tailor → application shell]
-  I --> J[Generate tailored resume + cover letter]
-  J --> K[Review / regenerate / Mark Applied]
-  K --> L[Kanban tracker status updates]
-  L --> M[Weekly digest cron]
+  E --> F[Pipeline auto-refresh: poll + stale-sweep + score]
+  F --> G[Matches list: score ≥ threshold]
+  G --> H[Tailor → application shell]
+  H --> I[Generate tailored resume + cover letter]
+  I --> J[Review / regenerate / Mark Applied]
+  J --> K[Kanban tracker status updates]
+  K --> L[Weekly digest cron]
+  F -. resume changed .-> R[Auto re-score top matches]
+  R --> G
 ```
 
 ---
@@ -133,14 +141,14 @@ Re-extract without re-upload: `POST /api/profile/resume/reparse` downloads the s
 
 ```mermaid
 sequenceDiagram
-  participant Cron as POST /api/cron/poll-ats
+  participant Trig as Cron / pipeline / manual
   participant Ing as ingestion/poll
   participant GH as Greenhouse API
   participant LV as Lever API
   participant DB as companies + postings
 
-  Note over Cron: Authorization Bearer CRON_SECRET
-  Cron->>Ing: pollCompanies(admin)
+  Note over Trig: Triggered by cron (CRON_SECRET), the auto-refresh pipeline, or POST /api/pipeline/run
+  Trig->>Ing: pollCompanies(admin)
   Ing->>DB: load active companies
   loop each company batch
     alt greenhouse
@@ -152,8 +160,12 @@ sequenceDiagram
     end
     Ing->>DB: upsert postings (ats_source, external_id)
   end
-  Ing-->>Cron: { polled, upserted, errors }
+  Ing-->>Trig: { polled, upserted, errors }
 ```
+
+**Stale-job sweep:** the pipeline then runs `deactivateStalePostings()` — any posting whose
+`last_seen_at` is older than **30 days** is set `is_active = false` and drops out of Browse and
+Matches. Postings that reappear on the board are reactivated automatically by the upsert.
 
 ### 3.4 Scoring → Matches list
 
@@ -184,6 +196,12 @@ sequenceDiagram
 ```
 
 Cron alternative: `POST /api/cron/score` (service role + `CRON_SECRET`) batches all active profiles.
+
+**Re-scoring on resume change:** `/api/score/run` also accepts `force: true` (the Matches
+"Re-score matches" button) to re-score the current user's top-ranked jobs even if already scored.
+In the background pipeline, `rescoreChangedProfiles()` compares a `resume_fingerprint` hash on
+`jp_profiles`; when the resume changes, it force re-scores the top ~50 ranked jobs for that
+profile. Fingerprints are backfilled on first run with **no** LLM cost.
 
 ### 3.5 Tailor → review → apply
 
@@ -244,14 +262,15 @@ Invalid transitions are rejected by `assertTransition` in `src/lib/applications/
 | Table | Written by | Read by |
 |---|---|---|
 | `jp_users` | Auth signup trigger | Billing / digest |
-| `jp_profiles` | Resume upload / profile PUT | Scoring, Matches gate |
+| `jp_profiles` | Resume upload / profile PUT | Scoring, Matches gate; `resume_fingerprint` written by pipeline rescore |
 | `jp_resumes` | Resume upload (multi-resume support) | Profile page, scoring |
 | `jp_companies` | Seed SQL | Poller |
-| `jp_postings` | Poller (6 ATS sources) | Scoring, Browse page, Matches join |
-| `jp_scores` | Score run / cron | Matches list |
-| `jp_applications` | Tailor flow + Kanban PATCH | Tracker, review UI, follow-up |
+| `jp_postings` | Poller (6 ATS sources); stale-sweep sets `is_active=false` | Scoring, Browse page, Matches join |
+| `jp_scores` | Score run / cron / pipeline rescore | Matches list |
+| `jp_applications` | Tailor flow + Kanban PATCH | Tracker, review UI, follow-up, Matches applied-filter |
 | `jp_interview_sessions` | Interview generate / evaluate | Interview UI, report |
 | `jp_usage_counters` | Tailor increment | Usage page / quota |
+| `jp_pipeline_state` | Pipeline (lock + TTL timestamps) | `/api/pipeline/status`, lazy trigger |
 
 ---
 
@@ -262,10 +281,12 @@ Invalid transitions are rejected by `assertTransition` in `src/lib/applications/
 | POST | `/api/profile/resume` | User | Upload + LLM autofill |
 | POST | `/api/profile/resume/reparse` | User | Re-extract stored file |
 | GET/PUT | `/api/profile` | User | Read/update profile |
-| POST | `/api/score/run` | User | Score my profile vs jobs (SSE streaming) |
-| GET | `/api/postings?min_score=` | User | Matches list (scored only) |
-| GET | `/api/postings/browse` | Public | Browse all active postings |
-| GET | `/api/stats` | User | Pipeline health (counts, timestamps) |
+| POST | `/api/score/run` | User | Score my profile vs jobs (SSE streaming; `force: true` re-scores) |
+| GET | `/api/postings?min_score=` | User | Matches list (scored only; hides applied unless `include_applied=1`) |
+| GET | `/api/postings/browse` | Public | Browse all active postings (triggers lazy refresh) |
+| GET | `/api/stats` | User | Pipeline health (counts, timestamps; triggers lazy refresh) |
+| GET | `/api/pipeline/status` | User | Pipeline freshness (`last_poll_at`, `stale`, `running`) |
+| POST | `/api/pipeline/run` | User | Manual "Refresh now" — poll + stale-sweep + score in background |
 | POST | `/api/applications` | User | Create application shell |
 | POST | `/api/applications/:id/tailor` | User | Generate drafts (quota) |
 | POST | `/api/applications/:id/regenerate` | User | Free regenerate |
@@ -373,35 +394,81 @@ sequenceDiagram
   FE-->>U: Refresh matches list
 ```
 
+### 6.5 Self-refreshing pipeline (auto-refresh)
+
+The app is self-sustaining: no external scheduler is required. Any visit to `/browse`
+(the public browse API) or `/matches` (via `/api/stats`) calls `maybeTriggerPipeline()`; if it's
+been >6h since the last poll and no run is live, it kicks off `runPipeline()` **after** the
+response is sent (`next/server` `after()`). A DB lock (`jp_pipeline_state.running` +
+`running_at`, with a 15-min stale timeout) serializes concurrent runs across requests/instances.
+
+```mermaid
+sequenceDiagram
+  actor U as User
+  participant FE as /browse or /matches
+  participant Stats as GET /api/stats or /api/postings/browse
+  participant Pipe as pipeline/runPipeline
+  participant Lock as jp_pipeline_state
+  participant ATS as ATS APIs
+  participant DB as postings/scores
+
+  U->>FE: Open page
+  FE->>Stats: fetch (PipelineStats / postings)
+  Stats->>Pipe: maybeTriggerPipeline(admin) — stale? (>6h) && not running?
+  Pipe->>Lock: acquirePipelineLock()
+  Lock-->>Pipe: lock acquired
+  Pipe->>ATS: pollCompanies() → upsert jp_postings
+  Pipe->>DB: deactivateStalePostings(30 days)
+  Pipe->>DB: scoreUnscoredBatch() → new jp_scores
+  Pipe->>DB: rescoreChangedProfiles() → force re-score on resume change
+  Pipe->>Lock: releasePipelineLock()
+  Stats-->>FE: response (page renders)
+```
+
+Manual refresh: **"Refresh now"** on `/browse` → `POST /api/pipeline/run` (409 if a run is
+live). Freshness is surfaced by `GET /api/pipeline/status` → `{ last_poll_at, stale, running }`.
+
 ## 7. Why Matches can look empty
 
-Matches only lists rows in `jp_scores` for **your** profile above `min_score`.
+Matches only lists rows in `jp_scores` for **your** profile above `min_score`, and hides jobs you've
+already applied to (unless the "Show applied" toggle is on).
 
 Typical first-run state:
 
-1. Poller has filled `jp_postings` (thousands of jobs) ✓  
+1. Pipeline auto-refresh fills `jp_postings` (thousands of jobs) ✓  
 2. Profile has `resume_parsed` ✓  
 3. `jp_scores` is still empty ✗ → **Auto-score triggers automatically!**
 4. Progress bar shows "Scoring 1/20 · Stripe SWE…"
 5. Matches appear as scoring completes
 
-You can also browse all postings at `/browse` before scoring — search, filter, and trigger scoring on individual jobs.
+Job freshness: postings unseen for 30 days are deactivated and leave the list, so Matches/Browse
+reflect the live market rather than a stale snapshot. Scores refresh automatically when you update
+your resume (fingerprint-based re-score), or on demand via **Re-score matches**.
+
+You can also browse all postings at `/browse` before scoring — search, filter, "Refresh now", and
+trigger scoring on individual jobs.
 
 ---
 
 ## 7. Local operator cheatsheet
 
 ```bash
-# Load cron secret from env file
+# The pipeline self-refreshes on page visits (lazy TTL, >6h). Manual triggers:
+
+# Manual refresh (authenticated) — "Refresh now" button, or:
+curl -X POST -H "Content-Type: application/json" \
+  http://localhost:5200/api/pipeline/run -d "{}"
+
+# Pipeline freshness:
+curl http://localhost:5200/api/pipeline/status
+# → { "last_poll_at": "...", "stale": false, "running": false }
+
+# Cron path (still available; requires CRON_SECRET):
 export CRON_SECRET="$(grep '^CRON_SECRET=' .env.local | cut -d= -f2-)"
-
-# Ingest / refresh jobs
 curl -X POST -H "Authorization: Bearer $CRON_SECRET" \
-  http://localhost:3000/api/cron/poll-ats
-
-# Batch score (all profiles) — or use Matches UI button for your user only
+  http://localhost:5200/api/cron/poll-ats
 curl -X POST -H "Authorization: Bearer $CRON_SECRET" \
-  http://localhost:3000/api/cron/score
+  http://localhost:5200/api/cron/score
 ```
 
 Env used by LLM paths: `OPENAI_COMPATIBLE_BASE_URL`, `OPENAI_COMPATIBLE_API_KEY`, `OPENAI_COMPATIBLE_MODEL`.

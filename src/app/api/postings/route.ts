@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_MIN_SCORE, filterByMinScore } from "@/lib/scoring/score";
+import { markAndFilterApplied } from "@/lib/matches/applied";
 
 async function requireUser() {
   const supabase = await createClient();
@@ -42,6 +43,7 @@ export async function GET(request: Request) {
       ? Number(maxAgeDaysRaw)
       : null;
   const sort = searchParams.get("sort") === "date" ? "date" : "score";
+  const includeApplied = searchParams.get("include_applied") === "1";
 
   const { data: profile, error: profileError } = await supabase
     .from("jp_profiles")
@@ -66,7 +68,7 @@ export async function GET(request: Request) {
       gaps,
       scored_at,
       posting_id,
-      postings (
+      jp_postings (
         id,
         company_name,
         title,
@@ -96,7 +98,7 @@ export async function GET(request: Request) {
     gaps: unknown;
     scored_at: string;
     posting_id: string;
-    postings:
+    jp_postings:
       | {
           id: string;
           company_name: string;
@@ -128,9 +130,9 @@ export async function GET(request: Request) {
 
   let rows = ((data ?? []) as ScoreJoin[])
     .map((row) => {
-      const posting = Array.isArray(row.postings)
-        ? row.postings[0]
-        : row.postings;
+      const posting = Array.isArray(row.jp_postings)
+        ? row.jp_postings[0]
+        : row.jp_postings;
       if (!posting || !posting.is_active) return null;
       return {
         id: posting.id,
@@ -156,6 +158,14 @@ export async function GET(request: Request) {
     .filter((row): row is NonNullable<typeof row> => row != null);
 
   rows = filterByMinScore(rows, minScore);
+
+  // Hide applied jobs unless the client opts in (RLS scopes to this profile).
+  const { data: appRows } = await supabase
+    .from("jp_applications")
+    .select("posting_id")
+    .eq("profile_id", profile.id);
+  const appliedIds = (appRows ?? []).map((a) => a.posting_id as string);
+  rows = markAndFilterApplied(rows, appliedIds, includeApplied);
 
   if (q) {
     rows = rows.filter((row) => {

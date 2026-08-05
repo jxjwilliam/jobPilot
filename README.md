@@ -12,6 +12,10 @@ JobPilot is an AI career-operations pipeline: upload a resume, get fields auto-f
 - **Browse page** — search all active job postings, filter by keyword/location/remote (`/browse`)
 - **Mock interview** — AI generates role-specific questions, evaluates answers with STAR scoring, produces report (`/interview/[id]`)
 - **Stale application detection** — flags applications idle for 21+ days, drafts AI follow-up emails
+- **Self-refreshing pipeline** — jobs refresh automatically (lazy TTL on page visits) + a manual "Refresh now" button on Browse; no external cron required
+- **Stale job expiry** — postings unseen on their ATS board for 30 days are auto-deactivated and drop out of Browse/Matches
+- **Applied-job tracking** — applied jobs hide from Matches by default, with a "Show applied" toggle and Applied badge
+- **Resume-change re-scoring** — matches re-score automatically when you update your resume, plus a manual "Re-score matches" button
 - Tailoring + regenerate + review UI; Kanban tracker with stale badges
 - Pipeline stats bar (total jobs, scored count, applications, last poll time)
 - Quota / mock Stripe portal; weekly digest (mock email)
@@ -66,6 +70,10 @@ npx supabase db push
 npx supabase db query --linked --file supabase/seed_companies.sql
 ```
 
+> Tip: to wipe and recreate everything from scratch (all data, schema, and seed in one
+> shot), run `npx supabase db reset --linked`. The seed file is wired into
+> `supabase/config.toml` (`[db.seed].sql_paths`), so it re-seeds automatically.
+
 4. Run the app:
 
 ```bash
@@ -77,13 +85,16 @@ Open [http://localhost:5200](http://localhost:5200). Sign in with a magic link.
 ## First-run pipeline
 
 ```bash
-# Load secret from .env.local (shell does not auto-load it)
+# Jobs refresh AUTOMATICALLY: any visit to /browse or /matches kicks off a
+# poll+sweep+score in the background when it's been >6h since the last poll
+# (uses next/server after(); no external cron needed). The steps below are
+# optional manual triggers.
 export CRON_SECRET="$(grep '^CRON_SECRET=' .env.local | cut -d= -f2-)"
 export BASE=http://localhost:5200
 
-# 1) Ingest jobs
-curl -sS -X POST "$BASE/api/cron/poll-ats" \
-  -H "Authorization: Bearer $CRON_SECRET"
+# 1) (Optional) Ingest jobs now, or hit "Refresh now" on /browse:
+curl -sS -X POST "$BASE/api/pipeline/run" -H "Content-Type: application/json" -d "{}"
+#    (authenticated user) — or via cron: POST /api/cron/poll-ats with Bearer CRON_SECRET
 
 # 2) Complete onboarding (upload resume → review autofill)
 
@@ -97,10 +108,12 @@ curl -sS -X POST "$BASE/api/cron/poll-ats" \
 | POST | `/api/cron/poll-ats` | Cron secret | Ingest 6 ATS sources |
 | POST | `/api/cron/score` | Cron secret | Batch-score all profiles |
 | POST | `/api/cron/digest` | Cron secret | Weekly digests (mock or Resend) |
-| POST | `/api/score/run` | User (session) | Score current user with SSE streaming |
-| GET | `/api/postings` | User (session) | Matches list (scored only) |
-| GET | `/api/postings/browse` | Public | Browse all active postings |
-| GET | `/api/stats` | User (session) | Pipeline health (counts, timestamps) |
+| POST | `/api/score/run` | User (session) | Score current user with SSE streaming (`force: true` re-scores) |
+| GET | `/api/postings` | User (session) | Matches list (scored only; hides applied unless `include_applied=1`) |
+| GET | `/api/postings/browse` | Public | Browse all active postings (also triggers lazy refresh) |
+| GET | `/api/stats` | User (session) | Pipeline health (counts, timestamps; also triggers lazy refresh) |
+| GET | `/api/pipeline/status` | User (session) | Pipeline freshness (`last_poll_at`, `stale`, `running`) |
+| POST | `/api/pipeline/run` | User (session) | Manual "Refresh now" — poll + stale-sweep + score in background |
 | POST | `/api/profile/resume` | User | Upload + LLM autofill |
 | POST | `/api/profile/resume/reparse` | User | Re-extract from stored file |
 | POST | `/api/applications` | User | Create application shell |
@@ -117,8 +130,8 @@ curl -sS -X POST "$BASE/api/cron/poll-ats" \
 
 | Page | Path | Description |
 |---|---|---|
-| Matches | `/matches` | Scored jobs with streaming Auto-score, Tailor, Mock Interview buttons |
-| Browse | `/browse` | Search all active postings across 6 ATS platforms |
+| Matches | `/matches` | Scored jobs with streaming Auto-score, Re-score, Tailor, Mock Interview; "Show applied" toggle |
+| Browse | `/browse` | Search all active postings across 6 ATS platforms; "Refresh now" + last-updated stamp |
 | Applications | `/applications` | Kanban tracker with stale detection badges |
 | Application Detail | `/applications/[id]` | Resume diff, cover letter edit, follow-up draft |
 | Interview | `/interview/[id]` | Mock interview with AI question generation + evaluation |
@@ -128,19 +141,19 @@ curl -sS -X POST "$BASE/api/cron/poll-ats" \
 
 ## Architecture
 
-Core libraries: `src/lib/{ingestion,scoring,tailoring,applications,billing,notifications,llm,profile,stream}`.
+Core libraries: `src/lib/{ingestion,scoring,tailoring,applications,billing,notifications,llm,profile,stream,pipeline,matches}`.
 
 Components: `src/components/{AppNav,EmptyState,PipelineStats,brand,profile,ui}`.
 
 UI system: **shadcn/ui** (Button, Card, Badge, Progress, Skeleton, Tabs, Dialog, DropdownMenu) with Tailwind CSS v3.
 
-Data model: `jp_users`, `jp_profiles`, `jp_resumes`, `jp_companies`, `jp_postings`, `jp_scores`, `jp_applications`, `jp_interview_sessions`, `jp_usage_counters`. RLS on all.
+Data model: `jp_users`, `jp_profiles`, `jp_resumes`, `jp_companies`, `jp_postings`, `jp_scores`, `jp_applications`, `jp_interview_sessions`, `jp_usage_counters`, `jp_pipeline_state` (refresh lock/TTL). RLS on all.
 
 ## Scripts
 
 ```bash
 npm run dev    # Next.js (Turbopack)
-npm test       # Vitest (39 tests across 9 files)
+npm test       # Vitest (59 tests across 11 files)
 npm run build  # production build
 ```
 

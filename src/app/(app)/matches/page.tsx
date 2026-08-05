@@ -25,6 +25,7 @@ type MatchedPosting = {
   matched_skills: string[];
   gaps: string[];
   scored_at: string;
+  applied: boolean;
 };
 
 function rationaleSnippet(text: string, max = 180): string {
@@ -69,9 +70,10 @@ export default function MatchesPage() {
   const [minScore, setMinScore] = useState(50);
   const [query, setQuery] = useState("");
   const [draftQuery, setDraftQuery] = useState("");
-  const [location, setLocation] = useState("Canada");
-  const [draftLocation, setDraftLocation] = useState("Canada");
+  const [location, setLocation] = useState("");
+  const [draftLocation, setDraftLocation] = useState("");
   const [remoteOnly, setRemoteOnly] = useState(false);
+  const [includeApplied, setIncludeApplied] = useState(false);
   const [maxAgeDays, setMaxAgeDays] = useState<number | "">("");
   const [sort, setSort] = useState<"score" | "date">("score");
   const [loading, setLoading] = useState(true);
@@ -97,10 +99,11 @@ export default function MatchesPage() {
     if (query.trim()) params.set("q", query.trim());
     if (location.trim()) params.set("location", location.trim());
     if (remoteOnly) params.set("remote", "1");
+    if (includeApplied) params.set("include_applied", "1");
     if (maxAgeDays !== "") params.set("max_age_days", String(maxAgeDays));
     params.set("sort", sort);
     return params.toString();
-  }, [minScore, query, location, remoteOnly, maxAgeDays, sort]);
+  }, [minScore, query, location, remoteOnly, includeApplied, maxAgeDays, sort]);
 
   const loadMatches = useCallback(async () => {
     setLoading(true);
@@ -159,7 +162,7 @@ export default function MatchesPage() {
     }
   }, [loading, scoring, autoScored, totalPostings, totalScores]);
 
-  async function handleScoreNow() {
+  async function handleScoreNow(force = false) {
     setScoring(true);
     setError(null);
     setStatus(null);
@@ -169,7 +172,7 @@ export default function MatchesPage() {
       const res = await fetch("/api/score/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ limit: 20, stream: true }),
+        body: JSON.stringify({ limit: 20, stream: true, force }),
       });
 
       if (!res.ok) {
@@ -290,6 +293,15 @@ export default function MatchesPage() {
           <Sparkles className="mr-1.5 h-4 w-4" />
           {scoring ? "Scoring…" : "Score more matches"}
         </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={scoring || loading}
+          onClick={() => void handleScoreNow(true)}
+        >
+          <Sparkles className="mr-1.5 h-4 w-4" />
+          Re-score matches
+        </Button>
       </div>
 
       <div className="grid gap-3 rounded-lg border border-neutral-200 bg-neutral-50 p-4 sm:grid-cols-2 lg:grid-cols-6">
@@ -373,6 +385,16 @@ export default function MatchesPage() {
             className="rounded border-neutral-300"
           />
           Remote only
+        </label>
+
+        <label className="flex items-end gap-2 pb-1 text-sm text-neutral-700">
+          <input
+            type="checkbox"
+            checked={includeApplied}
+            onChange={(e) => setIncludeApplied(e.target.checked)}
+            className="rounded border-neutral-300"
+          />
+          Show applied
         </label>
       </div>
 
@@ -516,9 +538,10 @@ export default function MatchesPage() {
                     onClick: () => {
                       setMinScore(0);
                       setMaxAgeDays("");
-                      setLocation("Canada");
-                      setDraftLocation("Canada");
+                      setLocation("");
+                      setDraftLocation("");
                       setRemoteOnly(false);
+                      setIncludeApplied(false);
                       setQuery("");
                       setDraftQuery("");
                     },
@@ -555,6 +578,15 @@ export default function MatchesPage() {
                     >
                       Fit {Math.round(posting.score)}
                     </span>
+                    {posting.applied ? (
+                      <Badge
+                        variant="secondary"
+                        className="text-xs font-semibold"
+                        title="You've already applied for this job"
+                      >
+                        Applied
+                      </Badge>
+                    ) : null}
                   </div>
 
                   <p className="text-sm text-neutral-700">

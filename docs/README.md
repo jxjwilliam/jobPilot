@@ -22,7 +22,8 @@ Setup and operator commands: repo root [`README.md`](../README.md).
 | **Greenhouse** | Popular ATS. JobPilot pulls **real public job JSON** from `boards-api.greenhouse.io/v1/boards/{company}/jobs` (no login; same feed careers pages use). Free for candidates to apply; we do **not** auto-submit. |
 | **Lever** | Another ATS with a similar public feed: `api.lever.co/v0/postings/{company}`. Also Tier‑1 MVP source. |
 | **Board slug** | Short company id in those URLs (e.g. `stripe`, `gitlab`) stored in `companies.board_slug`. |
-| **Cron** | Scheduled / on-demand server jobs secured by `CRON_SECRET`. Routes: `poll-ats` (ingest jobs), `score` (batch LLM fit scores), `digest` (weekly email). Not Greenhouse billing. |
+| **Pipeline** | The self-refreshing job pipeline: poll ATS → deactivate stale jobs (30 days) → score new pairs → re-score on resume change. Runs in the background on page visits (lazy TTL, >6h) via `src/lib/pipeline/`, plus a manual "Refresh now". Serialized by a DB lock. |
+| **Cron** | Optional scheduled / on-demand server jobs secured by `CRON_SECRET`. Routes: `poll-ats` (ingest jobs), `score` (batch LLM fit scores), `digest` (weekly email). Not Greenhouse billing. The app no longer *requires* cron — the pipeline self-refreshes. |
 | **Match / score** | LLM fit score (0–100) of **your profile** vs a posting; Matches lists scores above a min threshold. |
 | **Customize application (Tailor)** | LLM drafts a tailored resume + cover letter for one job; human review; you apply on the company site. |
 | **Quota / billing** | JobPilot SaaS limits on **tailoring count** (Free vs Pro). Mock Stripe by default — unrelated to Greenhouse fees. |

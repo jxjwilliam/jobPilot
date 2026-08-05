@@ -12,6 +12,10 @@ JobPilot 是一个 AI 职业工作流平台：上传简历，LLM 自动填充字
 - **职位浏览** — 搜索所有已拉取的职位，支持关键词/地点/远程筛选（`/browse`）
 - **模拟面试** — AI 根据职位生成面试题目，评估回答（STAR 评分），生成面试报告（`/interview/[id]`）
 - **申请跟进提醒** — 检测超过 21 天未更新的申请，AI 草拟跟进邮件
+- **自刷新流水线** — 访问页面时自动刷新职位（惰性 TTL，>6 小时）+ Browse 页「立即刷新」按钮；无需外部 Cron
+- **职位过期清理** — 超过 30 天未在 ATS 板上出现的职位自动停用，从 Browse / Matches 移除
+- **已投递职位跟踪** — 已投递职位默认从 Matches 隐藏，可勾选「显示已投递」并显示标记
+- **简历变更重新评分** — 更新简历后自动重新评分匹配，另有手动「重新评分」按钮
 - 定制材料 + 重新生成 + 审核 UI；Kanban 进度跟踪（含陈旧标记）
 - 流水线统计栏（职位总数、已评分数、申请数、上次拉取时间）
 - 配额 / Mock Stripe 门户；每周摘要（Mock Email）
@@ -66,6 +70,10 @@ npx supabase db push
 npx supabase db query --linked --file supabase/seed_companies.sql
 ```
 
+> 提示：如需一次性清空并从零重建（所有数据、Schema 和种子），运行
+> `npx supabase db reset --linked`。种子文件已配置在 `supabase/config.toml`
+> （`[db.seed].sql_paths`），会自动重新导入。
+
 4. 运行应用：
 
 ```bash
@@ -77,13 +85,15 @@ npm run dev
 ## 首次运行流程
 
 ```bash
-# 从 .env.local 加载 CRON_SECRET（shell 不会自动加载）
+# 职位会自动刷新：访问 /browse 或 /matches 时，如果距离上次拉取超过 6 小时，
+# 会在后台触发 拉取+清理+评分（使用 next/server after()，无需外部 Cron）。
+# 以下步骤为可选的手动触发方式。
 export CRON_SECRET="$(grep '^CRON_SECRET=' .env.local | cut -d= -f2-)"
 export BASE=http://localhost:5200
 
-# 1) 获取职位数据
-curl -sS -X POST "$BASE/api/cron/poll-ats" \
-  -H "Authorization: Bearer $CRON_SECRET"
+# 1) （可选）立即获取职位，或使用 /browse 上的「立即刷新」：
+curl -sS -X POST "$BASE/api/pipeline/run" -H "Content-Type: application/json" -d "{}"
+#    （需登录用户）— 或通过 Cron：POST /api/cron/poll-ats 携带 Bearer CRON_SECRET
 
 # 2) 完成入职流程（上传简历 → 审核 AI 自动填充的内容）
 
@@ -97,10 +107,12 @@ curl -sS -X POST "$BASE/api/cron/poll-ats" \
 | POST | `/api/cron/poll-ats` | Cron secret | 拉取 6 个 ATS 来源的职位 |
 | POST | `/api/cron/score` | Cron secret | 批量评分所有用户 |
 | POST | `/api/cron/digest` | Cron secret | 每周摘要（Mock 或 Resend） |
-| POST | `/api/score/run` | 用户（Session） | 流式评分（SSE 实时进度） |
-| GET | `/api/postings` | 用户（Session） | 匹配列表（仅已评分） |
-| GET | `/api/postings/browse` | 公开 | 浏览所有职位 |
-| GET | `/api/stats` | 用户（Session） | 流水线统计（计数、时间） |
+| POST | `/api/score/run` | 用户（Session） | 流式评分（SSE 实时进度；`force: true` 重新评分） |
+| GET | `/api/postings` | 用户（Session） | 匹配列表（仅已评分；默认隐藏已投递，除非 `include_applied=1`） |
+| GET | `/api/postings/browse` | 公开 | 浏览所有职位（同时触发惰性刷新） |
+| GET | `/api/stats` | 用户（Session） | 流水线统计（计数、时间；同时触发惰性刷新） |
+| GET | `/api/pipeline/status` | 用户（Session） | 流水线新鲜度（`last_poll_at`、`stale`、`running`） |
+| POST | `/api/pipeline/run` | 用户（Session） | 手动「立即刷新」— 后台执行 拉取+清理+评分 |
 | POST | `/api/profile/resume` | 用户 | 上传 + LLM 自动填充 |
 | POST | `/api/profile/resume/reparse` | 用户 | 重新解析已存储文件 |
 | POST | `/api/applications` | 用户 | 创建申请 |
@@ -117,8 +129,8 @@ curl -sS -X POST "$BASE/api/cron/poll-ats" \
 
 | 页面 | 路径 | 说明 |
 |---|---|---|
-| Matches | `/matches` | 已评分职位 + 流式自动评分 + 定制 + 面试 |
-| Browse | `/browse` | 搜索全部 6 个 ATS 平台的职位 |
+| Matches | `/matches` | 已评分职位 + 流式自动评分 + 重新评分 + 定制 + 面试；「显示已投递」开关 |
+| Browse | `/browse` | 搜索全部 6 个 ATS 平台的职位；「立即刷新」按钮 + 上次更新时间 |
 | Applications | `/applications` | Kanban 看板 + 陈旧标记 |
 | 申请详情 | `/applications/[id]` | 简历对比、求职信编辑、跟进草稿 |
 | 模拟面试 | `/interview/[id]` | AI 生成问题 + 评估 + 报告 |
@@ -128,19 +140,19 @@ curl -sS -X POST "$BASE/api/cron/poll-ats" \
 
 ## 架构
 
-核心库：`src/lib/{ingestion,scoring,tailoring,applications,billing,notifications,llm,profile,stream}`。
+核心库：`src/lib/{ingestion,scoring,tailoring,applications,billing,notifications,llm,profile,stream,pipeline,matches}`。
 
 组件：`src/components/{AppNav,EmptyState,PipelineStats,brand,profile,ui}`。
 
 UI 系统：**shadcn/ui**（Button, Card, Badge, Progress, Skeleton, Tabs, Dialog, DropdownMenu）+ Tailwind CSS v3。
 
-数据模型：`jp_users`, `jp_profiles`, `jp_resumes`, `jp_companies`, `jp_postings`, `jp_scores`, `jp_applications`, `jp_interview_sessions`, `jp_usage_counters`。全部启用 RLS。
+数据模型：`jp_users`, `jp_profiles`, `jp_resumes`, `jp_companies`, `jp_postings`, `jp_scores`, `jp_applications`, `jp_interview_sessions`, `jp_usage_counters`, `jp_pipeline_state`（刷新锁 / TTL）。全部启用 RLS。
 
 ## 脚本
 
 ```bash
 npm run dev    # Next.js（Turbopack）
-npm test       # Vitest（39 个测试，9 个文件）
+npm test       # Vitest（59 个测试，11 个文件）
 npm run build  # 生产构建
 ```
 

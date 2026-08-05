@@ -129,7 +129,7 @@ export async function GET() {
       applied_at,
       notes,
       status_history,
-      postings (
+      jp_postings (
         title,
         company_name
       )
@@ -143,9 +143,9 @@ export async function GET() {
   }
 
   const applications = (data ?? []).map((row) => {
-    const posting = Array.isArray(row.postings)
-      ? row.postings[0]
-      : row.postings;
+    const posting = Array.isArray(row.jp_postings)
+      ? row.jp_postings[0]
+      : row.jp_postings;
     return {
       id: row.id,
       status: row.status,

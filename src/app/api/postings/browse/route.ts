@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { maybeTriggerPipeline } from "@/lib/pipeline/pipeline";
 
 function daysAgoIso(days: number): string {
   const d = new Date();
@@ -73,6 +74,9 @@ export async function GET(request: Request) {
   const total = rows.length;
   const from = (page - 1) * perPage;
   const paged = rows.slice(from, from + perPage);
+
+  // Lazy background refresh: if the pipeline is stale, kick it off after the response.
+  await maybeTriggerPipeline(admin);
 
   return NextResponse.json({
     postings: paged,

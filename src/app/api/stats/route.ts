@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { maybeTriggerPipeline } from "@/lib/pipeline/pipeline";
+import {
+  getPipelineState,
+  isLockLive,
+} from "@/lib/pipeline/state";
 
 export async function GET() {
   const supabase = await createClient();
@@ -62,6 +68,15 @@ export async function GET() {
 
   const hasResume = Boolean(profileData?.resume_parsed);
 
+  // Lazy background refresh: if the pipeline is stale, kick it off after the response.
+  const admin = createAdminClient();
+  const pipelineState = await getPipelineState(admin).catch(() => null);
+  const pipelineRunning = isLockLive(
+    pipelineState?.running ?? false,
+    pipelineState?.running_at ?? null
+  );
+  await maybeTriggerPipeline(admin);
+
   return NextResponse.json({
     total_postings: totalPostings ?? 0,
     scored_count: scoredCount ?? 0,
@@ -69,5 +84,6 @@ export async function GET() {
     has_resume: hasResume,
     last_poll_at: lastPoll?.[0]?.last_polled_at ?? null,
     last_score_at: lastScore?.[0]?.scored_at ?? null,
+    pipeline_running: pipelineRunning,
   });
 }

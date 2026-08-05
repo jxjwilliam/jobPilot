@@ -160,14 +160,14 @@ export async function gatherDigestData(
     await Promise.all([
       adminClient
         .from("jp_scores")
-        .select("score, scored_at, postings(title)")
+        .select("score, scored_at, jp_postings(title)")
         .eq("profile_id", profileId)
         .gte("score", DEFAULT_MIN_SCORE)
         .gte("scored_at", since)
         .order("scored_at", { ascending: false }),
       adminClient
         .from("jp_applications")
-        .select("id, postings(title)")
+        .select("id, jp_postings(title)")
         .eq("profile_id", profileId)
         .eq("status", "reviewing"),
       getUsageForUser(adminClient, userId),
@@ -178,13 +178,13 @@ export async function gatherDigestData(
 
   const highFitTitles: string[] = [];
   for (const row of scores ?? []) {
-    const title = postingTitle(row.postings as PostingTitleJoin);
+    const title = postingTitle(row.jp_postings as PostingTitleJoin);
     if (title) highFitTitles.push(title);
   }
 
   const reviewingTitles: string[] = [];
   for (const row of apps ?? []) {
-    const title = postingTitle(row.postings as PostingTitleJoin);
+    const title = postingTitle(row.jp_postings as PostingTitleJoin);
     if (title) reviewingTitles.push(title);
   }
 

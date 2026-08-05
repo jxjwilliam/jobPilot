@@ -28,15 +28,18 @@ export async function POST(request: Request) {
 
   let limit = 25;
   let stream = false;
+  let force = false;
   try {
     const body = (await request.json().catch(() => ({}))) as {
       limit?: unknown;
       stream?: unknown;
+      force?: unknown;
     };
     if (typeof body.limit === "number" && Number.isFinite(body.limit)) {
       limit = Math.min(Math.max(Math.floor(body.limit), 1), 50);
     }
     stream = Boolean(body.stream);
+    force = Boolean(body.force);
   } catch {
     // default limit
   }
@@ -104,7 +107,10 @@ export async function POST(request: Request) {
     );
 
   const scored = new Set((existingScores ?? []).map((s) => s.posting_id));
-  const pending = ranked.filter((p) => !scored.has(p.id)).slice(0, limit);
+  // force: re-score the top-N even if already scored (user-initiated refresh).
+  const pending = force
+    ? ranked.slice(0, limit)
+    : ranked.filter((p) => !scored.has(p.id)).slice(0, limit);
 
   const scoreProfile: ScoreProfile = {
     id: profile.id,
@@ -125,7 +131,7 @@ export async function POST(request: Request) {
       for (let i = 0; i < pending.length; i++) {
         const posting = pending[i];
         try {
-          const outcome = await scorePair(admin, scoreProfile, posting);
+          const outcome = await scorePair(admin, scoreProfile, posting, { force });
           if (!outcome.skipped) {
             scoredCount += 1;
           }
@@ -196,7 +202,7 @@ export async function POST(request: Request) {
 
   for (const posting of pending) {
     try {
-      const outcome = await scorePair(admin, scoreProfile, posting);
+      const outcome = await scorePair(admin, scoreProfile, posting, { force });
       if (!outcome.skipped) scoredCount += 1;
     } catch (err) {
       errors += 1;
@@ -225,10 +231,9 @@ export async function POST(request: Request) {
     errors,
     error_samples: errorSamples,
     limit: limit || DEFAULT_SCORE_BATCH_LIMIT,
-    remaining_unscored_estimate: Math.max(
-      0,
-      ranked.length - scored.size - scoredCount
-    ),
+    remaining_unscored_estimate: force
+      ? 0
+      : Math.max(0, ranked.length - scored.size - scoredCount),
     totals: {
       scores: totalScores ?? 0,
       scores_gte_50: above50 ?? 0,

@@ -241,7 +241,7 @@ export type ScoreBatchResult = {
   errors: number;
 };
 
-function isActiveProfile(profile: ScoreProfile): boolean {
+export function isActiveProfile(profile: ScoreProfile): boolean {
   const resume = ParsedResumeSchema.safeParse(profile.resume_parsed ?? {});
   if (!resume.success) return false;
   const { summary, skills, experience } = resume.data;
