@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { tailorApplication } from "@/lib/tailoring/tailor";
+import { streamTailorApplication } from "@/lib/tailoring/tailor";
+import { createSseStream } from "@/lib/stream/sse";
 
 async function requireUser() {
   const supabase = await createClient();
@@ -15,6 +16,7 @@ async function requireUser() {
 /**
  * Regenerate tailored materials with a free-text instruction.
  * MVP: regenerate does NOT increment quota again (free after first tailor).
+ * Streams SSE: resume_start → resume_done → cover_start → cover_done → done.
  */
 export async function POST(
   request: Request,
@@ -49,20 +51,31 @@ export async function POST(
     );
   }
 
-  try {
-    const admin = createAdminClient();
-    // MVP: regenerate does NOT increment quota again (free after first tailor).
-    const application = await tailorApplication(admin, user.id, id, {
-      instruction,
-      countAgainstQuota: false,
-    });
-    return NextResponse.json({ application });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    const status =
-      message === "Application not found" || message === "Profile not found"
-        ? 404
-        : 500;
-    return NextResponse.json({ error: message }, { status });
-  }
+  const admin = createAdminClient();
+  const sse = createSseStream();
+  (async () => {
+    try {
+      for await (const event of streamTailorApplication(admin, user.id, id, {
+        instruction,
+        countAgainstQuota: false,
+      })) {
+        sse.send(event);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      sse.error(message);
+    } finally {
+      sse.close();
+    }
+  })().catch((err) => {
+    sse.error(err instanceof Error ? err.message : String(err));
+  });
+
+  return new Response(sse.stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
+  });
 }

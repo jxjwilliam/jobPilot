@@ -54,7 +54,7 @@ flowchart LR
 |---|---|
 | `ingestion/` | 轮询 6 个 ATS 来源 → upsert `jp_postings` |
 | `scoring/` | LLM 适配分 → `jp_scores`，支持 SSE 流式 |
-| `tailoring/` | LLM 简历 / 求职信草稿 → `jp_applications` |
+| `tailoring/` | 拆分 + SSE 流式的简历 / 求职信草稿 → `jp_applications` |
 | `applications/` | 状态机 + 陈旧检测 |
 | `billing/` | 配额 + Mock Stripe |
 | `notifications/` | 每周摘要 + Mock Email |
@@ -204,9 +204,9 @@ sequenceDiagram
   actor U as 用户
   participant FE as Matches / 申请详情
   participant Apps as POST /api/applications
-  participant Tailor as POST .../tailor
+  participant Tailor as POST .../tailor (SSE)
   participant Quota as billing/quota
-  participant LLM as LLM
+  participant LLM as LLM (2 次调用)
   participant DB as applications
 
   U->>FE: 定制
@@ -215,15 +215,25 @@ sequenceDiagram
   Apps-->>FE: application.id
   FE->>FE: 导航到 /applications/{id}
   U->>FE: 生成定制材料
-  FE->>Tailor: POST
-  Tailor->>Quota: canTailor? 如果是首次定制则 +1
-  Tailor->>LLM: tailored_resume + cover_letter
-  LLM-->>Tailor: JSON 草稿
-  Tailor->>DB: 保存草稿，status=reviewing
-  Tailor-->>FE: application
-  U->>FE: 编辑 / 重新生成 / 标记已投递
+  FE->>Tailor: POST（SSE 流式）
+  Tailor->>Quota: assertTailorQuota → 额度不足返回 402（开流前）
+  Tailor-->>FE: SSE resume_start → "第 1/2 步：定制简历…"
+  Tailor->>LLM: 第 1 次调用 — 仅定制简历
+  LLM-->>Tailor: tailored_resume JSON
+  Tailor-->>FE: SSE resume_done → "第 2/2 步：撰写求职信…"
+  Tailor->>LLM: 第 2 次调用 — 求职信（基于定制后的简历）
+  LLM-->>Tailor: cover_letter JSON
+  Tailor-->>FE: SSE cover_done
+  Tailor->>DB: 保存草稿，status=reviewing（+ 递增配额）
+  Tailor-->>FE: SSE done { application }
+  FE->>FE: 重新加载申请
+  U->>FE: 编辑 / 重新生成（同一 SSE 流程，免费）/ 标记已投递
   FE->>DB: PATCH status, cover letter, history
 ```
+
+定制已拆分为**两次 LLM 调用**（先简历，再基于定制简历撰写求职信），并通过 **SSE 流式**返回，
+每部分更快完成，UI 显示实时分步进度而非空白等待。
+`POST /api/applications/:id/regenerate` 使用相同流式流程（`countAgainstQuota: false`，首次定制后免费）。
 
 ### 3.6 Kanban 跟踪
 
@@ -280,8 +290,8 @@ stateDiagram-v2
 | GET | `/api/pipeline/status` | 用户 | 流水线新鲜度（`last_poll_at`、`stale`、`running`） |
 | POST | `/api/pipeline/run` | 用户 | 手动「立即刷新」— 后台 拉取+清理+评分 |
 | POST | `/api/applications` | 用户 | 创建申请草稿 |
-| POST | `/api/applications/:id/tailor` | 用户 | 生成草稿（配额） |
-| POST | `/api/applications/:id/regenerate` | 用户 | 免费重新生成 |
+| POST | `/api/applications/:id/tailor` | 用户 | 生成草稿（配额；SSE 流式，简历 → 求职信） |
+| POST | `/api/applications/:id/regenerate` | 用户 | 免费重新生成（SSE 流式） |
 | PATCH | `/api/applications/:id` | 用户 | 状态 / 备注 / 求职信 |
 | POST | `/api/cron/poll-ats` | Cron 密钥 | 获取职位 |
 | POST | `/api/cron/score` | Cron 密钥 | 批量评分所有 profile |
@@ -301,6 +311,9 @@ Matches 仅显示 `jp_scores` 表中**您的** profile 超过 `min_score` 的行
 3. `jp_scores` 仍然为空 ✗ → **自动评分自动触发！**
 4. 进度条显示「正在评分 1/20 · Stripe SWE…」
 5. 评分完成后匹配列表出现
+
+Matches 页面在职位或评分仍为空时（后台正在构建数据）每 ~8 秒自动刷新一次，
+无需手动刷新即可自动填充。
 
 职位新鲜度：超过 30 天未出现的职位会被停用并从列表中移除，因此 Matches / Browse 反映的是
 实时市场而非陈旧快照。更新简历后评分会自动刷新（基于指纹的重新评分），也可通过

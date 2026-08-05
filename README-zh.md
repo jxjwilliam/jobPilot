@@ -16,6 +16,7 @@ JobPilot 是一个 AI 职业工作流平台：上传简历，LLM 自动填充字
 - **职位过期清理** — 超过 30 天未在 ATS 板上出现的职位自动停用，从 Browse / Matches 移除
 - **已投递职位跟踪** — 已投递职位默认从 Matches 隐藏，可勾选「显示已投递」并显示标记
 - **简历变更重新评分** — 更新简历后自动重新评分匹配，另有手动「重新评分」按钮
+- **流式定制** — 简历 + 求职信分两步 LLM 生成，SSE 实时进度；重新生成免费
 - 定制材料 + 重新生成 + 审核 UI；Kanban 进度跟踪（含陈旧标记）
 - 流水线统计栏（职位总数、已评分数、申请数、上次拉取时间）
 - 配额 / Mock Stripe 门户；每周摘要（Mock Email）
@@ -116,8 +117,8 @@ curl -sS -X POST "$BASE/api/pipeline/run" -H "Content-Type: application/json" -d
 | POST | `/api/profile/resume` | 用户 | 上传 + LLM 自动填充 |
 | POST | `/api/profile/resume/reparse` | 用户 | 重新解析已存储文件 |
 | POST | `/api/applications` | 用户 | 创建申请 |
-| POST | `/api/applications/:id/tailor` | 用户 | 生成定制材料（消耗配额） |
-| POST | `/api/applications/:id/regenerate` | 用户 | 免费重新生成 |
+| POST | `/api/applications/:id/tailor` | 用户 | 生成定制材料（消耗配额；SSE 流式，简历 → 求职信） |
+| POST | `/api/applications/:id/regenerate` | 用户 | 免费重新生成（SSE 流式） |
 | POST | `/api/applications/:id/follow-up` | 用户 | 草拟跟进邮件 |
 | PATCH | `/api/applications/:id` | 用户 | 更新状态 / 备注 |
 | POST | `/api/interview/generate` | 用户 | 根据 JD 生成面试问题 |

@@ -16,6 +16,7 @@ JobPilot is an AI career-operations pipeline: upload a resume, get fields auto-f
 - **Stale job expiry** — postings unseen on their ATS board for 30 days are auto-deactivated and drop out of Browse/Matches
 - **Applied-job tracking** — applied jobs hide from Matches by default, with a "Show applied" toggle and Applied badge
 - **Resume-change re-scoring** — matches re-score automatically when you update your resume, plus a manual "Re-score matches" button
+- **Streamed tailoring** — resume + cover letter generated as two LLM steps with live SSE progress; regenerate is free
 - Tailoring + regenerate + review UI; Kanban tracker with stale badges
 - Pipeline stats bar (total jobs, scored count, applications, last poll time)
 - Quota / mock Stripe portal; weekly digest (mock email)
@@ -117,8 +118,8 @@ curl -sS -X POST "$BASE/api/pipeline/run" -H "Content-Type: application/json" -d
 | POST | `/api/profile/resume` | User | Upload + LLM autofill |
 | POST | `/api/profile/resume/reparse` | User | Re-extract from stored file |
 | POST | `/api/applications` | User | Create application shell |
-| POST | `/api/applications/:id/tailor` | User | Generate tailored drafts (quota) |
-| POST | `/api/applications/:id/regenerate` | User | Free regenerate with instruction |
+| POST | `/api/applications/:id/tailor` | User | Generate drafts (quota; SSE streamed — resume → cover letter) |
+| POST | `/api/applications/:id/regenerate` | User | Free regenerate with instruction (SSE streamed) |
 | POST | `/api/applications/:id/follow-up` | User | Generate follow-up email draft |
 | PATCH | `/api/applications/:id` | User | Status / notes / cover letter |
 | POST | `/api/interview/generate` | User | Generate interview questions from JD |

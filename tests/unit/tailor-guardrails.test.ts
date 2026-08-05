@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   buildTailorPrompt,
+  buildCoverLetterPrompt,
   TAILOR_NO_FABRICATION_GUARDRAIL,
 } from "@/lib/tailoring/tailor";
 import type { ParsedResume } from "@/lib/llm/schemas";
@@ -60,5 +61,47 @@ describe("buildTailorPrompt", () => {
 
     expect(prompt).toContain(TAILOR_NO_FABRICATION_GUARDRAIL);
     expect(prompt).toContain("Emphasize leadership");
+  });
+});
+
+describe("buildCoverLetterPrompt", () => {
+  const tailoredResume: ParsedResume = {
+    summary: "Senior TypeScript engineer with deep React experience",
+    skills: ["TypeScript", "React"],
+    experience: [
+      {
+        title: "Staff Engineer",
+        company: "Acme",
+        start: "2020",
+        end: "2024",
+        bullets: ["Built platform APIs in TypeScript"],
+      },
+    ],
+    education: [{ school: "State U", degree: "BS CS", year: "2019" }],
+  };
+
+  it("includes the no-fabrication guardrail and job context", () => {
+    const prompt = buildCoverLetterPrompt(
+      {
+        resume,
+        posting: {
+          id: "p1",
+          company_name: "Globex",
+          title: "Staff Engineer",
+          location: "Remote",
+          employment_type: "full_time",
+          description_raw: "Need TypeScript and React experience.",
+        },
+        score: { score: 88, matched_skills: ["TypeScript"] },
+      },
+      tailoredResume
+    );
+
+    expect(prompt).toContain(TAILOR_NO_FABRICATION_GUARDRAIL);
+    expect(prompt.toLowerCase()).toContain("never fabricate");
+    expect(prompt).toContain("Globex");
+    expect(prompt).toContain("Staff Engineer");
+    // The cover letter is grounded in the TAILORED resume, not the original.
+    expect(prompt).toContain("deep React experience");
   });
 });

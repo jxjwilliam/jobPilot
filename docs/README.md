@@ -25,7 +25,7 @@ Setup and operator commands: repo root [`README.md`](../README.md).
 | **Pipeline** | The self-refreshing job pipeline: poll ATS → deactivate stale jobs (30 days) → score new pairs → re-score on resume change. Runs in the background on page visits (lazy TTL, >6h) via `src/lib/pipeline/`, plus a manual "Refresh now". Serialized by a DB lock. |
 | **Cron** | Optional scheduled / on-demand server jobs secured by `CRON_SECRET`. Routes: `poll-ats` (ingest jobs), `score` (batch LLM fit scores), `digest` (weekly email). Not Greenhouse billing. The app no longer *requires* cron — the pipeline self-refreshes. |
 | **Match / score** | LLM fit score (0–100) of **your profile** vs a posting; Matches lists scores above a min threshold. |
-| **Customize application (Tailor)** | LLM drafts a tailored resume + cover letter for one job; human review; you apply on the company site. |
+| **Customize application (Tailor)** | LLM drafts a tailored resume + cover letter for one job — now split into two streamed steps (resume, then cover letter grounded in it) with live SSE progress; human review; you apply on the company site. |
 | **Quota / billing** | JobPilot SaaS limits on **tailoring count** (Free vs Pro). Mock Stripe by default — unrelated to Greenhouse fees. |
 | **Tier 1 vs Tier 3** | Tier 1 = public ATS APIs (Greenhouse/Lever). Tier 3 = LinkedIn/Indeed-style scraping — **out of MVP** (ToS / legal risk). |
 

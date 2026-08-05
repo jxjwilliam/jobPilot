@@ -124,6 +124,7 @@ export default function ApplicationDetailPage() {
     body: string;
     stale_days: number;
   } | null>(null);
+  const [tailorProgress, setTailorProgress] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -155,25 +156,68 @@ export default function ApplicationDetailPage() {
     void load();
   }, [load]);
 
+  /**
+   * POST a tailor/regenerate request and consume the SSE stream. The server
+   * emits resume_start → resume_done → cover_start → cover_done → done, so we
+   * surface step progress instead of a blank wait. `load()` is called by the
+   * caller once the stream completes.
+   */
+  async function runTailorStream(
+    url: string,
+    body: BodyInit | undefined,
+    label: string
+  ): Promise<void> {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: body ? { "Content-Type": "application/json" } : undefined,
+      body,
+    });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(data.error ?? `${label} failed`);
+    }
+    const reader = res.body?.getReader();
+    if (!reader) throw new Error("No response body");
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const event = JSON.parse(line.slice(6)) as {
+          type: string;
+          message?: string;
+        };
+        if (event.type === "resume_start") {
+          setTailorProgress("Step 1/2: Tailoring resume…");
+        } else if (event.type === "resume_done") {
+          setTailorProgress("Step 2/2: Writing cover letter…");
+        } else if (event.type === "cover_done") {
+          setTailorProgress("Finalizing…");
+        } else if (event.type === "error") {
+          throw new Error(event.message ?? `${label} failed`);
+        }
+        // "done" is ignored — the caller reloads the application.
+      }
+    }
+  }
+
   async function handleTailor() {
     setBusy("tailor");
     setError(null);
+    setTailorProgress("Starting…");
     try {
-      const res = await fetch(`/api/applications/${id}/tailor`, {
-        method: "POST",
-      });
-      const data = (await res.json()) as {
-        application?: ApplicationDetail;
-        error?: string;
-      };
-      if (!res.ok) {
-        throw new Error(data.error ?? "Tailoring failed");
-      }
+      await runTailorStream(`/api/applications/${id}/tailor`, undefined, "Tailoring");
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Tailoring failed");
     } finally {
       setBusy(null);
+      setTailorProgress(null);
     }
   }
 
@@ -184,25 +228,20 @@ export default function ApplicationDetailPage() {
     }
     setBusy("regenerate");
     setError(null);
+    setTailorProgress("Starting…");
     try {
-      const res = await fetch(`/api/applications/${id}/regenerate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ instruction: instruction.trim() }),
-      });
-      const data = (await res.json()) as {
-        application?: ApplicationDetail;
-        error?: string;
-      };
-      if (!res.ok) {
-        throw new Error(data.error ?? "Regenerate failed");
-      }
+      await runTailorStream(
+        `/api/applications/${id}/regenerate`,
+        JSON.stringify({ instruction: instruction.trim() }),
+        "Regenerate"
+      );
       setInstruction("");
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Regenerate failed");
     } finally {
       setBusy(null);
+      setTailorProgress(null);
     }
   }
 
@@ -370,6 +409,12 @@ export default function ApplicationDetailPage() {
       {error ? (
         <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
           {error}
+        </p>
+      ) : null}
+
+      {(busy === "tailor" || busy === "regenerate") && tailorProgress ? (
+        <p className="rounded border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700" role="status">
+          {tailorProgress}
         </p>
       ) : null}
 

@@ -58,7 +58,7 @@ flowchart LR
 |---|---|
 | `ingestion/` | Poll 6 ATS sources → upsert `jp_postings` |
 | `scoring/` | LLM fit score → `jp_scores`, with SSE streaming |
-| `tailoring/` | LLM resume/cover letter drafts → `jp_applications` |
+| `tailoring/` | Split + SSE-streamed resume/cover letter drafts → `jp_applications` |
 | `applications/` | Status state machine + stale detection |
 | `billing/` | Quota + mock Stripe |
 | `notifications/` | Weekly digest + mock email |
@@ -210,9 +210,9 @@ sequenceDiagram
   actor U as User
   participant FE as Matches / Application detail
   participant Apps as POST /api/applications
-  participant Tailor as POST .../tailor
+  participant Tailor as POST .../tailor (SSE)
   participant Quota as billing/quota
-  participant LLM as LLM
+  participant LLM as LLM (2 calls)
   participant DB as applications
 
   U->>FE: Tailor
@@ -221,15 +221,26 @@ sequenceDiagram
   Apps-->>FE: application.id
   FE->>FE: navigate /applications/{id}
   U->>FE: Generate tailored materials
-  FE->>Tailor: POST
-  Tailor->>Quota: canTailor? increment if first tailor
-  Tailor->>LLM: tailored_resume + cover_letter
-  LLM-->>Tailor: JSON draft
-  Tailor->>DB: save drafts, status=reviewing
-  Tailor-->>FE: application
-  U->>FE: Edit / Regenerate / Mark Applied
+  FE->>Tailor: POST (SSE stream)
+  Tailor->>Quota: assertTailorQuota → 402 if exhausted (before stream)
+  Tailor-->>FE: SSE resume_start → "Step 1/2: Tailoring resume…"
+  Tailor->>LLM: call 1 — tailored resume only
+  LLM-->>Tailor: tailored_resume JSON
+  Tailor-->>FE: SSE resume_done → "Step 2/2: Writing cover letter…"
+  Tailor->>LLM: call 2 — cover letter (grounded in tailored resume)
+  LLM-->>Tailor: cover_letter JSON
+  Tailor-->>FE: SSE cover_done
+  Tailor->>DB: save drafts, status=reviewing (+ increment quota)
+  Tailor-->>FE: SSE done { application }
+  FE->>FE: reload application
+  U->>FE: Edit / Regenerate (same SSE flow, free) / Mark Applied
   FE->>DB: PATCH status, cover letter, history
 ```
+
+Tailoring is **split into two LLM calls** (resume, then cover letter grounded in the tailored
+resume) and **streamed over SSE**, so each piece lands faster and the UI shows live step progress
+instead of a blank wait. `POST /api/applications/:id/regenerate` uses the same streamed flow with
+`countAgainstQuota: false` (free after the first tailor).
 
 ### 3.6 Kanban tracking
 
@@ -288,8 +299,8 @@ Invalid transitions are rejected by `assertTransition` in `src/lib/applications/
 | GET | `/api/pipeline/status` | User | Pipeline freshness (`last_poll_at`, `stale`, `running`) |
 | POST | `/api/pipeline/run` | User | Manual "Refresh now" — poll + stale-sweep + score in background |
 | POST | `/api/applications` | User | Create application shell |
-| POST | `/api/applications/:id/tailor` | User | Generate drafts (quota) |
-| POST | `/api/applications/:id/regenerate` | User | Free regenerate |
+| POST | `/api/applications/:id/tailor` | User | Generate drafts (quota; SSE streamed, resume → cover letter) |
+| POST | `/api/applications/:id/regenerate` | User | Free regenerate (SSE streamed) |
 | POST | `/api/applications/:id/follow-up` | User | Draft follow-up email |
 | PATCH | `/api/applications/:id` | User | Status / notes / cover letter |
 | POST | `/api/interview/generate` | User | Generate interview questions |
@@ -440,6 +451,9 @@ Typical first-run state:
 3. `jp_scores` is still empty ✗ → **Auto-score triggers automatically!**
 4. Progress bar shows "Scoring 1/20 · Stripe SWE…"
 5. Matches appear as scoring completes
+
+The Matches page self-refreshes every ~8s while postings or scores are still empty (data is being
+built in the background), so it fills in without a manual reload.
 
 Job freshness: postings unseen for 30 days are deactivated and leave the list, so Matches/Browse
 reflect the live market rather than a stale snapshot. Scores refresh automatically when you update

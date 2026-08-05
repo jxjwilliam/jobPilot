@@ -146,6 +146,19 @@ export default function MatchesPage() {
     void loadMatches();
   }, [loadMatches]);
 
+  // Auto-refresh while the background pipeline is still building data
+  // (postings or scores are empty), so the page fills in without a manual
+  // reload. Stops once both are populated.
+  useEffect(() => {
+    if (totalPostings == null) return; // initial load not finished yet
+    const incomplete = totalPostings === 0 || totalScores === 0;
+    if (!incomplete) return;
+    const id = setInterval(() => {
+      void loadMatches();
+    }, 8000);
+    return () => clearInterval(id);
+  }, [totalPostings, totalScores, loadMatches]);
+
   // Auto-score: if postings exist but nothing is scored yet, kick off scoring
   const [autoScored, setAutoScored] = useState(false);
   useEffect(() => {
@@ -328,7 +341,7 @@ export default function MatchesPage() {
               if (e.key === "Enter") setLocation(draftLocation.trim());
             }}
             onBlur={() => setLocation(draftLocation.trim())}
-            placeholder="Canada, Remote…"
+            placeholder="Location, Remote…"
             className="mt-1 w-full rounded border border-neutral-300 bg-white px-2 py-1.5 text-sm font-normal normal-case tracking-normal text-neutral-900"
           />
         </label>

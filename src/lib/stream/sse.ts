@@ -5,6 +5,11 @@
 
 export type SseEvent =
   | { type: "progress"; [key: string]: unknown }
+  // Tailor pipeline steps (split resume + cover letter)
+  | { type: "resume_start" }
+  | { type: "resume_done" }
+  | { type: "cover_start" }
+  | { type: "cover_done" }
   | { type: "done"; [key: string]: unknown }
   | { type: "error"; message: string };
 

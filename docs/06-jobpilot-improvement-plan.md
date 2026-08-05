@@ -117,8 +117,8 @@ const stream = await client.chat.completions.create({
 **为什么不用 Mastra 做这个？** 因为 Vercel AI SDK（或直接 SDK 流式调用）已经完美解决了流式传输问题，且只有很少的代码量。引入 Mastra 只为流式传输，就像用起重机搬一个纸箱。
 
 **实现:**
-- 评分 (`/api/score/run`) → 改为 SSE，逐条推送评分结果
-- 定制 (`/api/applications/:id/tailor`) → 改为 SSE，流式推送简历和求职信内容
+- 评分 (`/api/score/run`) → 改为 SSE，逐条推送评分结果 ✅
+- 定制 (`/api/applications/:id/tailor`) → 改为 SSE，流式推送简历和求职信内容 ✅（2026-08-05：进一步拆分为**两次 LLM 调用**——先定制简历，再基于定制简历撰写求职信，SSE 分步推送 `resume_start → resume_done → cover_start → cover_done → done`；`/regenerate` 同样流式且免费）
 - 简历解析 → 保持阻塞（这个场景下流式传输不关键）
 
 #### 1.2 空状态引导
