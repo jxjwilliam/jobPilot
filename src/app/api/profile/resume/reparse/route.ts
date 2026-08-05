@@ -23,7 +23,7 @@ export async function POST() {
   }
 
   const { data: profile, error: profileError } = await supabase
-    .from("profiles")
+    .from("jp_profiles")
     .select("resume_raw_url, preferences")
     .eq("user_id", user.id)
     .maybeSingle();
@@ -42,7 +42,7 @@ export async function POST() {
 
   const admin = createAdminClient();
   const { data: file, error: downloadError } = await admin.storage
-    .from("resumes")
+    .from("jp_resumes")
     .download(path);
 
   if (downloadError || !file) {
@@ -75,7 +75,7 @@ export async function POST() {
   }
 
   const { data: updated, error: updateError } = await supabase
-    .from("profiles")
+    .from("jp_profiles")
     .update({
       resume_parsed: parsed,
       preferences,

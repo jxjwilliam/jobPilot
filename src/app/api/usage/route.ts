@@ -14,7 +14,7 @@ export async function GET() {
   }
 
   try {
-    // Counter writes (period reset) need admin — usage_counters RLS is SELECT-only.
+    // Counter writes (period reset) need admin — jp_usage_counters RLS is SELECT-only.
     const admin = createAdminClient();
     const usage = await getUsageForUser(admin, user.id);
     return NextResponse.json(usage);

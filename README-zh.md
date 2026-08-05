@@ -72,14 +72,14 @@ npx supabase db query --linked --file supabase/seed_companies.sql
 npm run dev
 ```
 
-打开 [http://localhost:3000](http://localhost:3000)。使用魔法链接登录。
+打开 [http://localhost:5200](http://localhost:5200)。使用魔法链接登录。
 
 ## 首次运行流程
 
 ```bash
 # 从 .env.local 加载 CRON_SECRET（shell 不会自动加载）
 export CRON_SECRET="$(grep '^CRON_SECRET=' .env.local | cut -d= -f2-)"
-export BASE=http://localhost:3000
+export BASE=http://localhost:5200
 
 # 1) 获取职位数据
 curl -sS -X POST "$BASE/api/cron/poll-ats" \
@@ -134,7 +134,7 @@ curl -sS -X POST "$BASE/api/cron/poll-ats" \
 
 UI 系统：**shadcn/ui**（Button, Card, Badge, Progress, Skeleton, Tabs, Dialog, DropdownMenu）+ Tailwind CSS v3。
 
-数据模型：`users`, `profiles`, `resumes`, `companies`, `postings`, `scores`, `applications`, `interview_sessions`, `usage_counters`。全部启用 RLS。
+数据模型：`jp_users`, `jp_profiles`, `jp_resumes`, `jp_companies`, `jp_postings`, `jp_scores`, `jp_applications`, `jp_interview_sessions`, `jp_usage_counters`。全部启用 RLS。
 
 ## 脚本
 
@@ -146,4 +146,4 @@ npm run build  # 生产构建
 
 ## 账户删除
 
-**Profile → Danger zone** → `DELETE /api/account/delete` 删除 `resumes/{user_id}/` 下的 Storage 对象，并删除认证用户（FK 级联）。
+**Profile → Danger zone** → `DELETE /api/account/delete` 删除 `jp_resumes` 存储桶 `{user_id}/` 下的对象，并删除认证用户（FK 级联）。

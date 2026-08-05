@@ -42,7 +42,7 @@ export async function POST(request: Request) {
   }
 
   const { data: profile, error: profileError } = await supabase
-    .from("profiles")
+    .from("jp_profiles")
     .select("id, resume_parsed, preferences")
     .eq("user_id", user.id)
     .maybeSingle();
@@ -75,7 +75,7 @@ export async function POST(request: Request) {
   const admin = createAdminClient();
 
   const { data: postings, error: postingsError } = await admin
-    .from("postings")
+    .from("jp_postings")
     .select(
       "id, company_name, title, location, employment_type, description_raw, salary_min, salary_max"
     )
@@ -95,7 +95,7 @@ export async function POST(request: Request) {
   );
 
   const { data: existingScores } = await admin
-    .from("scores")
+    .from("jp_scores")
     .select("posting_id")
     .eq("profile_id", profile.id)
     .in(
@@ -155,12 +155,12 @@ export async function POST(request: Request) {
       }
 
       const { count: totalScores } = await admin
-        .from("scores")
+        .from("jp_scores")
         .select("id", { count: "exact", head: true })
         .eq("profile_id", profile.id);
 
       const { count: above50 } = await admin
-        .from("scores")
+        .from("jp_scores")
         .select("id", { count: "exact", head: true })
         .eq("profile_id", profile.id)
         .gte("score", 50);
@@ -209,12 +209,12 @@ export async function POST(request: Request) {
   }
 
   const { count: totalScores } = await admin
-    .from("scores")
+    .from("jp_scores")
     .select("id", { count: "exact", head: true })
     .eq("profile_id", profile.id);
 
   const { count: above50 } = await admin
-    .from("scores")
+    .from("jp_scores")
     .select("id", { count: "exact", head: true })
     .eq("profile_id", profile.id)
     .gte("score", 50);

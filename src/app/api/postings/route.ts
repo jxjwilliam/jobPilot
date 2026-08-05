@@ -44,7 +44,7 @@ export async function GET(request: Request) {
   const sort = searchParams.get("sort") === "date" ? "date" : "score";
 
   const { data: profile, error: profileError } = await supabase
-    .from("profiles")
+    .from("jp_profiles")
     .select("id")
     .eq("user_id", user.id)
     .maybeSingle();
@@ -57,7 +57,7 @@ export async function GET(request: Request) {
   }
 
   const { data, error } = await supabase
-    .from("scores")
+    .from("jp_scores")
     .select(
       `
       score,

@@ -51,9 +51,9 @@ flowchart LR
 
 | Module | Role |
 |---|---|
-| `ingestion/` | Poll 6 ATS sources → upsert `postings` |
-| `scoring/` | LLM fit score → `scores`, with SSE streaming |
-| `tailoring/` | LLM resume/cover letter drafts → `applications` |
+| `ingestion/` | Poll 6 ATS sources → upsert `jp_postings` |
+| `scoring/` | LLM fit score → `jp_scores`, with SSE streaming |
+| `tailoring/` | LLM resume/cover letter drafts → `jp_applications` |
 | `applications/` | Status state machine + stale detection |
 | `billing/` | Quota + mock Stripe |
 | `notifications/` | Weekly digest + mock email |
@@ -243,15 +243,15 @@ Invalid transitions are rejected by `assertTransition` in `src/lib/applications/
 
 | Table | Written by | Read by |
 |---|---|---|
-| `users` | Auth signup trigger | Billing / digest |
-| `profiles` | Resume upload / profile PUT | Scoring, Matches gate |
-| `resumes` | Resume upload (multi-resume support) | Profile page, scoring |
-| `companies` | Seed SQL | Poller |
-| `postings` | Poller (6 ATS sources) | Scoring, Browse page, Matches join |
-| `scores` | Score run / cron | Matches list |
-| `applications` | Tailor flow + Kanban PATCH | Tracker, review UI, follow-up |
-| `interview_sessions` | Interview generate / evaluate | Interview UI, report |
-| `usage_counters` | Tailor increment | Usage page / quota |
+| `jp_users` | Auth signup trigger | Billing / digest |
+| `jp_profiles` | Resume upload / profile PUT | Scoring, Matches gate |
+| `jp_resumes` | Resume upload (multi-resume support) | Profile page, scoring |
+| `jp_companies` | Seed SQL | Poller |
+| `jp_postings` | Poller (6 ATS sources) | Scoring, Browse page, Matches join |
+| `jp_scores` | Score run / cron | Matches list |
+| `jp_applications` | Tailor flow + Kanban PATCH | Tracker, review UI, follow-up |
+| `jp_interview_sessions` | Interview generate / evaluate | Interview UI, report |
+| `jp_usage_counters` | Tailor increment | Usage page / quota |
 
 ---
 
@@ -375,13 +375,13 @@ sequenceDiagram
 
 ## 7. Why Matches can look empty
 
-Matches only lists rows in `scores` for **your** profile above `min_score`.
+Matches only lists rows in `jp_scores` for **your** profile above `min_score`.
 
 Typical first-run state:
 
-1. Poller has filled `postings` (thousands of jobs) ✓  
+1. Poller has filled `jp_postings` (thousands of jobs) ✓  
 2. Profile has `resume_parsed` ✓  
-3. `scores` is still empty ✗ → **Auto-score triggers automatically!**
+3. `jp_scores` is still empty ✗ → **Auto-score triggers automatically!**
 4. Progress bar shows "Scoring 1/20 · Stripe SWE…"
 5. Matches appear as scoring completes
 

@@ -100,12 +100,12 @@ Interview sessions table deferred.
 
 ## 6. Data flow
 
-1. User confirms profile → `profiles`  
-2. Cron poller loads active `companies` → Greenhouse/Lever public APIs → upsert `postings`  
-3. Scorer finds unscored (profile, posting) pairs → LLM → `scores`  
+1. User confirms profile → `jp_profiles`  
+2. Cron poller loads active `jp_companies` → Greenhouse/Lever public APIs → upsert `jp_postings`  
+3. Scorer finds unscored (profile, posting) pairs → LLM → `jp_scores`  
 4. Matches UI reads scores ≥ threshold  
-5. Tailor: check quota → LLM → upsert `applications` (status `reviewing`) → increment `usage_counters`  
-6. Approve / status patches update `applications` + `status_history`  
+5. Tailor: check quota → LLM → upsert `jp_applications` (status `reviewing`) → increment `jp_usage_counters`  
+6. Approve / status patches update `jp_applications` + `status_history`  
 7. Digest cron aggregates high-fit / pending review / quota → notification adapter  
 
 LLM calls always target structured JSON for parse, score, and tailor outputs.
@@ -120,7 +120,7 @@ LLM calls always target structured JSON for parse, score, and tailor outputs.
 | LLM | Real — OpenAI-compatible from `.env` (`OPENAI_COMPATIBLE_BASE_URL` or provider-specific keys) |
 | Stripe | Interface + **mock** (upgrade CTA works; no live charge until keys) |
 | Resend | Interface + **mock** (log digest payload) |
-| ATS | Real HTTP to public Greenhouse/Lever board APIs; seed `companies` list (200–500 tech boards) |
+| ATS | Real HTTP to public Greenhouse/Lever board APIs; seed `jp_companies` list (200–500 tech boards) |
 
 Env template (no secrets in repo): Supabase URL/anon/service keys, LLM base URL/API key/model, optional Stripe/Resend keys, `BILLING_MODE=mock|live`, `EMAIL_MODE=mock|live`.
 

@@ -40,7 +40,7 @@ export async function GET(
   const { id } = await context.params;
 
   const { data: profile, error: profileError } = await supabase
-    .from("profiles")
+    .from("jp_profiles")
     .select("id, resume_parsed")
     .eq("user_id", user.id)
     .maybeSingle();
@@ -53,7 +53,7 @@ export async function GET(
   }
 
   const { data: application, error: appError } = await supabase
-    .from("applications")
+    .from("jp_applications")
     .select(
       "id, profile_id, posting_id, status, tailored_resume, tailored_cover_letter, applied_at, notes, status_history"
     )
@@ -69,7 +69,7 @@ export async function GET(
   }
 
   const { data: posting, error: postingError } = await supabase
-    .from("postings")
+    .from("jp_postings")
     .select(
       "id, company_name, title, location, employment_type, apply_url, description_raw"
     )
@@ -84,7 +84,7 @@ export async function GET(
   }
 
   const { data: score } = await supabase
-    .from("scores")
+    .from("jp_scores")
     .select("score, rationale, matched_skills, gaps, scored_at")
     .eq("profile_id", profile.id)
     .eq("posting_id", posting.id)
@@ -142,7 +142,7 @@ export async function PATCH(
   };
 
   const { data: profile, error: profileError } = await supabase
-    .from("profiles")
+    .from("jp_profiles")
     .select("id")
     .eq("user_id", user.id)
     .maybeSingle();
@@ -155,7 +155,7 @@ export async function PATCH(
   }
 
   const { data: existing, error: existingError } = await supabase
-    .from("applications")
+    .from("jp_applications")
     .select(
       "id, status, tailored_resume, tailored_cover_letter, applied_at, notes, status_history, profile_id, posting_id"
     )
@@ -228,7 +228,7 @@ export async function PATCH(
   }
 
   const { data: updated, error: updateError } = await supabase
-    .from("applications")
+    .from("jp_applications")
     .update(updates)
     .eq("id", id)
     .eq("profile_id", profile.id)

@@ -33,8 +33,8 @@ Setup and operator commands: repo root [`README.md`](../README.md).
 ## Key product points
 
 1. **Upload resume → AI autofills** profile + suggested preferences.  
-2. **Poll** Greenhouse/Lever → `postings` table.  
-3. **Score** profile × jobs (UI “Score more matches” or cron) → `scores`.  
+2. **Poll** Greenhouse/Lever → `jp_postings` table.  
+3. **Score** profile × jobs (UI “Score more matches” or cron) → `jp_scores`.  
 4. **Customize application** → review → Mark Applied → **Kanban** tracker.  
 5. **Weekly digest** + usage meter (email/billing often **mock** in local env).
 

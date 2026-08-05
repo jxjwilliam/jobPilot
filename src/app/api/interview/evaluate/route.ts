@@ -77,7 +77,7 @@ export async function POST(request: Request) {
   }
 
   const { data: profile } = await supabase
-    .from("profiles")
+    .from("jp_profiles")
     .select("id")
     .eq("user_id", user.id)
     .maybeSingle();
@@ -88,7 +88,7 @@ export async function POST(request: Request) {
 
   const admin = createAdminClient();
   const { data: session, error: sessionError } = await admin
-    .from("interview_sessions")
+    .from("jp_interview_sessions")
     .select("*")
     .eq("id", sessionId)
     .eq("profile_id", profile.id)
@@ -158,7 +158,7 @@ export async function POST(request: Request) {
   const newStatus = completedCount >= questions.length ? "completed" : "in_progress";
 
   const { error: updateError } = await admin
-    .from("interview_sessions")
+    .from("jp_interview_sessions")
     .update({
       answers,
       status: newStatus,

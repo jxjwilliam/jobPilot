@@ -40,7 +40,7 @@ export async function POST(request: Request) {
   }
 
   const { data: profile, error: profileError } = await supabase
-    .from("profiles")
+    .from("jp_profiles")
     .select("id")
     .eq("user_id", user.id)
     .maybeSingle();
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
   }
 
   const { data: posting, error: postingError } = await supabase
-    .from("postings")
+    .from("jp_postings")
     .select("id")
     .eq("id", postingId)
     .maybeSingle();
@@ -66,7 +66,7 @@ export async function POST(request: Request) {
   }
 
   const { data: existing, error: existingError } = await supabase
-    .from("applications")
+    .from("jp_applications")
     .select("id, status, posting_id, profile_id")
     .eq("profile_id", profile.id)
     .eq("posting_id", postingId)
@@ -82,7 +82,7 @@ export async function POST(request: Request) {
 
   const now = new Date().toISOString();
   const { data: created, error: createError } = await supabase
-    .from("applications")
+    .from("jp_applications")
     .insert({
       profile_id: profile.id,
       posting_id: postingId,
@@ -106,7 +106,7 @@ export async function GET() {
   }
 
   const { data: profile, error: profileError } = await supabase
-    .from("profiles")
+    .from("jp_profiles")
     .select("id")
     .eq("user_id", user.id)
     .maybeSingle();
@@ -119,7 +119,7 @@ export async function GET() {
   }
 
   const { data, error } = await supabase
-    .from("applications")
+    .from("jp_applications")
     .select(
       `
       id,

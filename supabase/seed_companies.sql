@@ -1,7 +1,7 @@
 -- Seed known public Greenhouse + Lever boards (verified via public ATS APIs).
 -- Idempotent: unique (ats_source, board_slug).
 
-insert into public.companies (ats_source, board_slug, company_name, is_active)
+insert into public.jp_companies (ats_source, board_slug, company_name, is_active)
 values
   -- Greenhouse — Canadian-friendly boards (verified: have Canada-based and/or Remote jobs)
   ('greenhouse', 'gitlab', 'GitLab', true),       -- 36 Canada, 168 remote

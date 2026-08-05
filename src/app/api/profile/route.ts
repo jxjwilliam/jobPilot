@@ -26,7 +26,7 @@ export async function GET() {
   }
 
   const { data, error } = await supabase
-    .from("profiles")
+    .from("jp_profiles")
     .select("resume_parsed, preferences, resume_raw_url, updated_at")
     .eq("user_id", user.id)
     .maybeSingle();
@@ -99,7 +99,7 @@ export async function PUT(request: Request) {
   }
 
   const { data, error } = await supabase
-    .from("profiles")
+    .from("jp_profiles")
     .update(updates)
     .eq("user_id", user.id)
     .select("resume_parsed, preferences, resume_raw_url, updated_at")

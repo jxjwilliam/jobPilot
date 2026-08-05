@@ -51,7 +51,7 @@ export async function POST(request: Request) {
   }
 
   const { data: profile } = await supabase
-    .from("profiles")
+    .from("jp_profiles")
     .select("id")
     .eq("user_id", user.id)
     .maybeSingle();
@@ -62,7 +62,7 @@ export async function POST(request: Request) {
 
   const admin = createAdminClient();
   const { data: posting, error: postingError } = await admin
-    .from("postings")
+    .from("jp_postings")
     .select("title, company_name, description_raw, employment_type, location")
     .eq("id", postingId)
     .maybeSingle();
@@ -110,7 +110,7 @@ ${posting.description_raw.slice(0, 8000)}`,
 
   // Create interview session
   const { data: session, error: sessionError } = await admin
-    .from("interview_sessions")
+    .from("jp_interview_sessions")
     .insert({
       profile_id: profile.id,
       posting_id: postingId,

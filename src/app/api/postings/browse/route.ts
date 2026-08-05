@@ -23,7 +23,7 @@ export async function GET(request: Request) {
   const admin = createAdminClient();
 
   let query = admin
-    .from("postings")
+    .from("jp_postings")
     .select(
       "id, company_name, title, location, employment_type, apply_url, posted_at, first_seen_at, last_seen_at, description_raw",
       { count: "exact" }

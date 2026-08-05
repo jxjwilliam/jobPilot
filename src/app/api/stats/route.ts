@@ -11,7 +11,7 @@ export async function GET() {
   }
 
   const { data: profile } = await supabase
-    .from("profiles")
+    .from("jp_profiles")
     .select("id")
     .eq("user_id", user.id)
     .maybeSingle();
@@ -29,33 +29,33 @@ export async function GET() {
     { count: applicationCount },
   ] = await Promise.all([
     supabase
-      .from("postings")
+      .from("jp_postings")
       .select("*", { count: "exact", head: true })
       .eq("is_active", true),
     supabase
-      .from("scores")
+      .from("jp_scores")
       .select("*", { count: "exact", head: true })
       .eq("profile_id", profile.id),
     supabase
-      .from("companies")
+      .from("jp_companies")
       .select("last_polled_at")
       .order("last_polled_at", { ascending: false })
       .limit(1),
     supabase
-      .from("scores")
+      .from("jp_scores")
       .select("scored_at")
       .eq("profile_id", profile.id)
       .order("scored_at", { ascending: false })
       .limit(1),
     supabase
-      .from("applications")
+      .from("jp_applications")
       .select("*", { count: "exact", head: true })
       .eq("profile_id", profile.id),
   ]);
 
   // Check if profile has a resume
   const { data: profileData } = await supabase
-    .from("profiles")
+    .from("jp_profiles")
     .select("resume_parsed")
     .eq("id", profile.id)
     .single();

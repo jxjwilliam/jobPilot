@@ -142,7 +142,7 @@ async function loadTailorContext(
   applicationId: string
 ) {
   const { data: profile, error: profileError } = await client
-    .from("profiles")
+    .from("jp_profiles")
     .select("id, resume_parsed, user_id")
     .eq("user_id", userId)
     .maybeSingle();
@@ -151,7 +151,7 @@ async function loadTailorContext(
   if (!profile) throw new Error("Profile not found");
 
   const { data: application, error: appError } = await client
-    .from("applications")
+    .from("jp_applications")
     .select(
       "id, profile_id, posting_id, status, tailored_resume, tailored_cover_letter, applied_at, notes, status_history"
     )
@@ -163,7 +163,7 @@ async function loadTailorContext(
   if (!application) throw new Error("Application not found");
 
   const { data: posting, error: postingError } = await client
-    .from("postings")
+    .from("jp_postings")
     .select(
       "id, company_name, title, location, employment_type, description_raw"
     )
@@ -174,7 +174,7 @@ async function loadTailorContext(
   if (!posting) throw new Error("Posting not found");
 
   const { data: score } = await client
-    .from("scores")
+    .from("jp_scores")
     .select("score, rationale, matched_skills, gaps")
     .eq("profile_id", profile.id)
     .eq("posting_id", posting.id)
@@ -243,7 +243,7 @@ export type TailorOptions = {
  * Checks quota (when counting), calls LLM, saves drafts, sets status `reviewing`.
  */
 export async function tailorApplication(
-  /** Prefer admin client: usage_counters RLS is SELECT-only for writes. */
+  /** Prefer admin client: jp_usage_counters RLS is SELECT-only for writes. */
   adminClient: SupabaseClient,
   userId: string,
   applicationId: string,
@@ -281,7 +281,7 @@ export async function tailorApplication(
       : [...history, { status: nextStatus, timestamp: now }];
 
   const { data: updated, error: updateError } = await adminClient
-    .from("applications")
+    .from("jp_applications")
     .update({
       tailored_resume: result.tailored_resume,
       tailored_cover_letter: result.cover_letter,

@@ -121,7 +121,7 @@ src/lib/
   ingestion/   greenhouse.ts, lever.ts, ashby.ts, workable.ts, recruitee.ts, personio.ts, poll.ts orchestrator
   scoring/     score.ts — LLM scores profile vs posting
   tailoring/   tailor.ts — LLM generates tailored resume + cover letter
-  profile/     upload resume → LLM parses → store in profiles.resume_parsed (jsonb)
+  profile/     upload resume → LLM parses → store in jp_profiles.resume_parsed (jsonb)
   applications/ status.ts — status machine (discovered → reviewing → applied → ...)
   billing/     quota.ts (usage counters), stripe.ts (mock adapter)
   notifications/ digest.ts, email.ts (mock adapter)
@@ -141,7 +141,7 @@ src/components/
 
 ### Data model (tables)
 
-`users`, `profiles`, `resumes` (multi-resume support), `companies`, `postings`, `scores`, `applications`, `interview_sessions`, `usage_counters`. RLS on all. Auto-create user+profile+usage on signup via `handle_new_user()` trigger. Storage bucket `resumes` (private, per-user folders).
+`jp_users`, `jp_profiles`, `jp_resumes` (multi-resume support), `jp_companies`, `jp_postings`, `jp_scores`, `jp_applications`, `jp_interview_sessions`, `jp_usage_counters`. RLS on all. Auto-create user+profile+usage on signup via `handle_new_user()` trigger. Storage bucket `jp_resumes` (private, per-user folders).
 
 ### LLM integration
 
@@ -162,7 +162,7 @@ Uses `openai` SDK pointed at any OpenAI-compatible API (`OPENAI_COMPATIBLE_BASE_
 - **Token expiry:** 3600s (1 hour) — `jwt_expiry` in config, matches `expires_in` from verify response
 - **OTP length:** 6 digits (`otp_length = 6`)
 - **Site URL:** `http://127.0.0.1:3000` in local config — if dev runs on localhost vs 127.0.0.1, redirects may fail
-- **RLS:** `companies` and `postings` are `select`-only for authenticated users; writes go through the admin client (service_role key)
+- **RLS:** `jp_companies` and `jp_postings` are `select`-only for authenticated users; writes go through the admin client (service_role key)
 
 ## Config files
 

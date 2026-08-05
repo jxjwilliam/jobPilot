@@ -47,9 +47,9 @@ flowchart LR
 
 | 模块 | 职责 |
 |---|---|
-| `ingestion/` | 轮询 Greenhouse/Lever → upsert `postings` |
-| `scoring/` | LLM 适配分 → `scores` |
-| `tailoring/` | LLM 简历 / 求职信草稿 → `applications` |
+| `ingestion/` | 轮询 Greenhouse/Lever → upsert `jp_postings` |
+| `scoring/` | LLM 适配分 → `jp_scores` |
+| `tailoring/` | LLM 简历 / 求职信草稿 → `jp_applications` |
 | `applications/` | 状态机 |
 | `billing/` | 配额 + Mock Stripe |
 | `notifications/` | 每周摘要 + Mock Email |
@@ -238,13 +238,13 @@ stateDiagram-v2
 
 | 表 | 写入方 | 读取方 |
 |---|---|---|
-| `users` | 认证注册触发器 | 账单 / 摘要 |
-| `profiles` | 简历上传 / profile PUT | 评分、匹配列表门槛 |
-| `companies` | Seed SQL | 轮询器 |
-| `postings` | 轮询器 | 评分、匹配 join |
-| `scores` | 评分运行 / Cron | 匹配列表 |
-| `applications` | 定制流程 + Kanban PATCH | 跟踪器、审核 UI |
-| `usage_counters` | 定制增量 | 使用量页面 / 配额 |
+| `jp_users` | 认证注册触发器 | 账单 / 摘要 |
+| `jp_profiles` | 简历上传 / profile PUT | 评分、匹配列表门槛 |
+| `jp_companies` | Seed SQL | 轮询器 |
+| `jp_postings` | 轮询器 | 评分、匹配 join |
+| `jp_scores` | 评分运行 / Cron | 匹配列表 |
+| `jp_applications` | 定制流程 + Kanban PATCH | 跟踪器、审核 UI |
+| `jp_usage_counters` | 定制增量 | 使用量页面 / 配额 |
 
 ---
 
@@ -269,13 +269,13 @@ stateDiagram-v2
 
 ## 6. 为什么 Matches 可能显示为空
 
-Matches 仅显示 `scores` 表中**您的** profile 超过 `min_score` 的行。
+Matches 仅显示 `jp_scores` 表中**您的** profile 超过 `min_score` 的行。
 
 典型的首次运行状态：
 
-1. 轮询器已填充 `postings`（数千个职位）✓  
+1. 轮询器已填充 `jp_postings`（数千个职位）✓  
 2. Profile 有 `resume_parsed` ✓  
-3. `scores` 仍然为空 ✗ → Matches 显示为空  
+3. `jp_scores` 仍然为空 ✗ → Matches 显示为空  
 
 **UI 修复：** 打开 Matches → **立即评分**（调用 `/api/score/run`）。重复直到出现足够的高适配职位。如有需要可降低最低分数。
 

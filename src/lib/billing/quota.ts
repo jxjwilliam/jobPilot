@@ -48,7 +48,7 @@ export async function ensureUsagePeriod(
   userId: string
 ): Promise<UsageCounterRow> {
   const { data, error } = await client
-    .from("usage_counters")
+    .from("jp_usage_counters")
     .select("user_id, period_start, tailoring_count, reset_at")
     .eq("user_id", userId)
     .maybeSingle();
@@ -65,7 +65,7 @@ export async function ensureUsagePeriod(
       reset_at: nextMonthResetAt(now),
     };
     const { data: inserted, error: insertError } = await client
-      .from("usage_counters")
+      .from("jp_usage_counters")
       .insert(row)
       .select("user_id, period_start, tailoring_count, reset_at")
       .single();
@@ -75,7 +75,7 @@ export async function ensureUsagePeriod(
 
   if (now >= new Date(data.reset_at)) {
     const { data: updated, error: updateError } = await client
-      .from("usage_counters")
+      .from("jp_usage_counters")
       .update({
         period_start: periodStartDate(now),
         tailoring_count: 0,
@@ -98,7 +98,7 @@ export async function getUsageForUser(
   const counter = await ensureUsagePeriod(client, userId);
 
   const { data: user, error } = await client
-    .from("users")
+    .from("jp_users")
     .select("subscription_tier")
     .eq("id", userId)
     .maybeSingle();
@@ -123,7 +123,7 @@ export async function incrementTailoring(
   const counter = await ensureUsagePeriod(client, userId);
 
   const { data, error } = await client
-    .from("usage_counters")
+    .from("jp_usage_counters")
     .update({ tailoring_count: counter.tailoring_count + 1 })
     .eq("user_id", userId)
     .select("user_id, period_start, tailoring_count, reset_at")

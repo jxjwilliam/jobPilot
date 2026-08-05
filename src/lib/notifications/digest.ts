@@ -125,7 +125,7 @@ export async function listDigestRecipients(
   adminClient: SupabaseClient
 ): Promise<DigestProfileRow[]> {
   const { data, error } = await adminClient
-    .from("profiles")
+    .from("jp_profiles")
     .select("id, user_id, users!inner(id, email)");
 
   if (error) throw new Error(error.message);
@@ -159,14 +159,14 @@ export async function gatherDigestData(
   const [{ data: scores, error: scoresError }, { data: apps, error: appsError }, usage] =
     await Promise.all([
       adminClient
-        .from("scores")
+        .from("jp_scores")
         .select("score, scored_at, postings(title)")
         .eq("profile_id", profileId)
         .gte("score", DEFAULT_MIN_SCORE)
         .gte("scored_at", since)
         .order("scored_at", { ascending: false }),
       adminClient
-        .from("applications")
+        .from("jp_applications")
         .select("id, postings(title)")
         .eq("profile_id", profileId)
         .eq("status", "reviewing"),

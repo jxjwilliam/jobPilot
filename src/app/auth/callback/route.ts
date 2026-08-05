@@ -22,7 +22,7 @@ export async function GET(request: Request) {
 
       if (user) {
         const { data: profile } = await supabase
-          .from("profiles")
+          .from("jp_profiles")
           .select("resume_raw_url, resume_parsed")
           .eq("user_id", user.id)
           .maybeSingle();

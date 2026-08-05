@@ -170,7 +170,7 @@ export type ScorePairResult = {
 };
 
 /**
- * Score one profile × posting pair via LLM and upsert into `scores`.
+ * Score one profile × posting pair via LLM and upsert into `jp_scores`.
  * Skips if a score row already exists unless `force: true`.
  */
 export async function scorePair(
@@ -181,7 +181,7 @@ export async function scorePair(
 ): Promise<ScorePairResult> {
   if (!options.force) {
     const { data: existing } = await adminClient
-      .from("scores")
+      .from("jp_scores")
       .select("id")
       .eq("profile_id", profile.id)
       .eq("posting_id", posting.id)
@@ -214,7 +214,7 @@ export async function scorePair(
   const content = getCompletionText(completion);
   const result = extractScoreResult(content);
 
-  const { error } = await adminClient.from("scores").upsert(
+  const { error } = await adminClient.from("jp_scores").upsert(
     {
       profile_id: profile.id,
       posting_id: posting.id,
@@ -262,7 +262,7 @@ export async function scoreUnscoredBatch(
   const limit = options.limit ?? DEFAULT_SCORE_BATCH_LIMIT;
 
   const { data: profiles, error: profilesError } = await adminClient
-    .from("profiles")
+    .from("jp_profiles")
     .select("id, resume_parsed, preferences");
 
   if (profilesError) {
@@ -275,7 +275,7 @@ export async function scoreUnscoredBatch(
   }
 
   const { data: postings, error: postingsError } = await adminClient
-    .from("postings")
+    .from("jp_postings")
     .select(
       "id, company_name, title, location, employment_type, description_raw, salary_min, salary_max"
     )
@@ -296,7 +296,7 @@ export async function scoreUnscoredBatch(
   const postingIds = activePostings.map((p) => p.id);
 
   const { data: existingScores, error: scoresError } = await adminClient
-    .from("scores")
+    .from("jp_scores")
     .select("profile_id, posting_id")
     .in("profile_id", profileIds)
     .in("posting_id", postingIds);

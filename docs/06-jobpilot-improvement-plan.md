@@ -72,7 +72,7 @@ npx supabase db push  # 应用 interview_sessions + resumes 表
 |---|---|---|---|
 | 5 | **模拟面试未构建** | 规范 §7.6 和 MVP 计划都列为快速跟进项，已规划但未实现 | 缺失核心差异化功能 |
 | 6 | **仅支持单份简历** | 数据模型：一个 profile 只能有一份 `resume_parsed` | 求职者通常需要多份简历用于不同岗位方向 |
-| 7 | **无法直接浏览职位** | Matches 仅从 `scores` 表读取；未评分的职位对用户不可见 | 用户无法主动搜索/浏览职位池 |
+| 7 | **无法直接浏览职位** | Matches 仅从 `jp_scores` 表读取；未评分的职位对用户不可见 | 用户无法主动搜索/浏览职位池 |
 | 8 | **Mock 计费/邮件模式** | `BILLING_MODE=mock` 是默认值；真实 Stripe/Resend 未接入 | 无法产生收入 |
 
 ### 🟢 次要：技术债务
@@ -310,7 +310,7 @@ jobpilot/
 
 ### 5.1 修复空状态（~2 小时）
 
-- [ ] `src/app/(app)/matches/page.tsx`：当 `scores` 为空时，显示职位总数和"开始评分"引导
+- [ ] `src/app/(app)/matches/page.tsx`：当 `jp_scores` 为空时，显示职位总数和"开始评分"引导
 - [ ] `src/app/(app)/applications/page.tsx`：当没有申请时，引导用户从 Matches 开始
 
 ### 5.2 添加评分进度提示（~4 小时）

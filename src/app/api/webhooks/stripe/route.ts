@@ -51,13 +51,13 @@ export async function POST(request: Request) {
       const admin = createAdminClient();
       if (userId) {
         const { error } = await admin
-          .from("users")
+          .from("jp_users")
           .update({ subscription_tier: tier })
           .eq("id", userId);
         if (error) throw new Error(error.message);
       } else if (customerId) {
         const { error } = await admin
-          .from("users")
+          .from("jp_users")
           .update({ subscription_tier: tier })
           .eq("stripe_customer_id", customerId);
         if (error) throw new Error(error.message);

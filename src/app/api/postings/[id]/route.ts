@@ -22,7 +22,7 @@ export async function GET(
   const { id } = await context.params;
 
   const { data: profile, error: profileError } = await supabase
-    .from("profiles")
+    .from("jp_profiles")
     .select("id")
     .eq("user_id", user.id)
     .maybeSingle();
@@ -35,7 +35,7 @@ export async function GET(
   }
 
   const { data: posting, error: postingError } = await supabase
-    .from("postings")
+    .from("jp_postings")
     .select(
       "id, company_name, title, location, employment_type, description_raw, salary_min, salary_max, apply_url, posted_at, is_active, ats_source"
     )
@@ -50,7 +50,7 @@ export async function GET(
   }
 
   const { data: score, error: scoreError } = await supabase
-    .from("scores")
+    .from("jp_scores")
     .select("score, rationale, matched_skills, gaps, scored_at")
     .eq("profile_id", profile.id)
     .eq("posting_id", id)

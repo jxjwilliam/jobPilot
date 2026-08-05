@@ -155,23 +155,23 @@ flowchart TD
 ## 6. Data model (MVP schema)
 
 ```
-users
+jp_users
   id (uuid, pk)
   email
   created_at
   subscription_tier (enum: free, pro, crunch)
   stripe_customer_id
 
-profiles
+jp_profiles
   id (uuid, pk)
-  user_id (fk -> users)
+  user_id (fk -> jp_users)
   resume_raw_url
   resume_parsed (jsonb: skills, experience[], education[], summary)
   preferences (jsonb: roles[], locations[], remote_pref, salary_floor,
                company_stage[], excluded_industries[])
   updated_at
 
-postings
+jp_postings
   id (uuid, pk)
   ats_source (enum: greenhouse, lever, ashby, workable, recruitee, personio)
   external_id (text)
@@ -187,19 +187,19 @@ postings
   is_active (bool)
   unique (ats_source, external_id)
 
-scores
+jp_scores
   id (uuid, pk)
-  profile_id (fk -> profiles)
-  posting_id (fk -> postings)
+  profile_id (fk -> jp_profiles)
+  posting_id (fk -> jp_postings)
   score (numeric 0-100)
   rationale (text)
   scored_at
   unique (profile_id, posting_id)
 
-applications
+jp_applications
   id (uuid, pk)
-  profile_id (fk -> profiles)
-  posting_id (fk -> postings)
+  profile_id (fk -> jp_profiles)
+  posting_id (fk -> jp_postings)
   status (enum: discovered, reviewing, applied, screening,
           interview, offer, rejected, archived)
   tailored_resume (jsonb)
@@ -208,16 +208,16 @@ applications
   status_history (jsonb array of {status, timestamp})
   notes (text)
 
-interview_sessions
+jp_interview_sessions
   id (uuid, pk)
-  application_id (fk -> applications)
+  application_id (fk -> jp_applications)
   transcript (text)
   questions_generated (jsonb)
   feedback (jsonb)
   created_at
 
-usage_counters
-  user_id (fk -> users)
+jp_usage_counters
+  user_id (fk -> jp_users)
   period_start
   tailoring_count
   reset_at
@@ -244,7 +244,7 @@ usage_counters
 - **Input:** profile, posting, matched_skills/gaps from scoring step, base resume
 - **Output:** tailored resume section edits (not full rewrite — preserve user's original structure and only adjust emphasis/keywords/summary) + a cover letter draft
 - **Guardrail:** never fabricate experience, dates, titles, or credentials not present in the source resume — the tailoring prompt must be constrained to rephrasing/reordering/emphasizing real content only
-- **Quota:** counted against `usage_counters.tailoring_count`; this is the primary paywall gate
+- **Quota:** counted against `jp_usage_counters.tailoring_count`; this is the primary paywall gate
 
 ### 7.4 Human review
 - Diff view: original vs. tailored resume, section by section

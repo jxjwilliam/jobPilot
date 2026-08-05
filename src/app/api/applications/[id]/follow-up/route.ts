@@ -38,7 +38,7 @@ export async function POST(
 
   // Load application with posting info
   const { data: profile } = await supabase
-    .from("profiles")
+    .from("jp_profiles")
     .select("id")
     .eq("user_id", user.id)
     .maybeSingle();
@@ -49,7 +49,7 @@ export async function POST(
 
   const admin = createAdminClient();
   const { data: app, error: appError } = await admin
-    .from("applications")
+    .from("jp_applications")
     .select("id, profile_id, posting_id, status, applied_at, status_history, notes")
     .eq("id", id)
     .eq("profile_id", profile.id)
@@ -72,7 +72,7 @@ export async function POST(
 
   // Load posting details
   const { data: posting, error: postingError } = await admin
-    .from("postings")
+    .from("jp_postings")
     .select("company_name, title")
     .eq("id", app.posting_id)
     .maybeSingle();
@@ -140,7 +140,7 @@ ${staleNote}`,
 
   // PATCH notes only — don't change status
   const { error: updateError } = await admin
-    .from("applications")
+    .from("jp_applications")
     .update({ notes: existingNotes })
     .eq("id", id);
 

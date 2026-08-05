@@ -8,7 +8,7 @@ async function listAllResumePaths(
 ): Promise<string[]> {
   const paths: string[] = [];
   const { data: entries, error } = await admin.storage
-    .from("resumes")
+    .from("jp_resumes")
     .list(userId, { limit: 1000 });
 
   if (error) {
@@ -39,7 +39,7 @@ export async function DELETE() {
 
     if (paths.length > 0) {
       const { error: removeError } = await admin.storage
-        .from("resumes")
+        .from("jp_resumes")
         .remove(paths);
       if (removeError) {
         throw new Error(`Failed to delete resume files: ${removeError.message}`);

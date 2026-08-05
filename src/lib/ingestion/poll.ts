@@ -52,7 +52,7 @@ async function markCompanyFailure(
   if (failures >= MAX_CONSECUTIVE_FAILURES) {
     patch.is_active = false;
   }
-  await adminClient.from("companies").update(patch).eq("id", company.id);
+  await adminClient.from("jp_companies").update(patch).eq("id", company.id);
 }
 
 async function markCompanySuccess(
@@ -61,7 +61,7 @@ async function markCompanySuccess(
   nowIso: string
 ): Promise<void> {
   await adminClient
-    .from("companies")
+    .from("jp_companies")
     .update({
       consecutive_failures: 0,
       last_polled_at: nowIso,
@@ -99,7 +99,7 @@ async function upsertPostings(
   let upserted = 0;
   for (let i = 0; i < rows.length; i += chunkSize) {
     const chunk = rows.slice(i, i + chunkSize);
-    const { error, count } = await adminClient.from("postings").upsert(chunk, {
+    const { error, count } = await adminClient.from("jp_postings").upsert(chunk, {
       onConflict: "ats_source,external_id",
       count: "exact",
     });
@@ -117,7 +117,7 @@ export async function pollCompanies(
   const result: PollResult = { polled: 0, upserted: 0, errors: [] };
 
   const { data: companies, error } = await adminClient
-    .from("companies")
+    .from("jp_companies")
     .select(
       "id, ats_source, board_slug, company_name, is_active, consecutive_failures, last_polled_at"
     )

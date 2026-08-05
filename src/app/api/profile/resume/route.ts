@@ -16,7 +16,7 @@ async function loadExistingPreferences(
   userId: string
 ): Promise<Preferences> {
   const { data } = await supabase
-    .from("profiles")
+    .from("jp_profiles")
     .select("preferences")
     .eq("user_id", userId)
     .maybeSingle();
@@ -51,7 +51,7 @@ export async function POST(request: Request) {
   const contentType = file.type || "application/octet-stream";
 
   const { error: uploadError } = await supabase.storage
-    .from("resumes")
+    .from("jp_resumes")
     .upload(path, buffer, {
       contentType,
       upsert: true,
@@ -88,7 +88,7 @@ export async function POST(request: Request) {
   }
 
   const { data: profile, error: updateError } = await supabase
-    .from("profiles")
+    .from("jp_profiles")
     .update({
       resume_raw_url: path,
       resume_parsed: parsed,

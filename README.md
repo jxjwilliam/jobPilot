@@ -72,14 +72,14 @@ npx supabase db query --linked --file supabase/seed_companies.sql
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Sign in with a magic link.
+Open [http://localhost:5200](http://localhost:5200). Sign in with a magic link.
 
 ## First-run pipeline
 
 ```bash
 # Load secret from .env.local (shell does not auto-load it)
 export CRON_SECRET="$(grep '^CRON_SECRET=' .env.local | cut -d= -f2-)"
-export BASE=http://localhost:3000
+export BASE=http://localhost:5200
 
 # 1) Ingest jobs
 curl -sS -X POST "$BASE/api/cron/poll-ats" \
@@ -134,7 +134,7 @@ Components: `src/components/{AppNav,EmptyState,PipelineStats,brand,profile,ui}`.
 
 UI system: **shadcn/ui** (Button, Card, Badge, Progress, Skeleton, Tabs, Dialog, DropdownMenu) with Tailwind CSS v3.
 
-Data model: `users`, `profiles`, `resumes`, `companies`, `postings`, `scores`, `applications`, `interview_sessions`, `usage_counters`. RLS on all.
+Data model: `jp_users`, `jp_profiles`, `jp_resumes`, `jp_companies`, `jp_postings`, `jp_scores`, `jp_applications`, `jp_interview_sessions`, `jp_usage_counters`. RLS on all.
 
 ## Scripts
 
@@ -146,4 +146,4 @@ npm run build  # production build
 
 ## Account deletion
 
-**Profile → Danger zone** → `DELETE /api/account/delete` removes Storage objects under `resumes/{user_id}/` and deletes the auth user (FK cascade).
+**Profile → Danger zone** → `DELETE /api/account/delete` removes Storage objects from the `jp_resumes` bucket under `{user_id}/` and deletes the auth user (FK cascade).
