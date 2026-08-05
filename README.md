@@ -148,7 +148,7 @@ Components: `src/components/{AppNav,EmptyState,PipelineStats,brand,profile,ui}`.
 
 UI system: **shadcn/ui** (Button, Card, Badge, Progress, Skeleton, Tabs, Dialog, DropdownMenu) with Tailwind CSS v3.
 
-Data model: `jp_users`, `jp_profiles`, `jp_resumes`, `jp_companies`, `jp_postings`, `jp_scores`, `jp_applications`, `jp_interview_sessions`, `jp_usage_counters`, `jp_pipeline_state` (refresh lock/TTL). RLS on all.
+Data model: `jp_users`, `jp_profiles`, `jp_companies`, `jp_postings`, `jp_scores`, `jp_applications`, `jp_interview_sessions`, `jp_usage_counters`, `jp_pipeline_state` (refresh lock/TTL). RLS on all.
 
 ## Scripts
 

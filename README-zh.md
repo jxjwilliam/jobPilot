@@ -147,7 +147,7 @@ curl -sS -X POST "$BASE/api/pipeline/run" -H "Content-Type: application/json" -d
 
 UI 系统：**shadcn/ui**（Button, Card, Badge, Progress, Skeleton, Tabs, Dialog, DropdownMenu）+ Tailwind CSS v3。
 
-数据模型：`jp_users`, `jp_profiles`, `jp_resumes`, `jp_companies`, `jp_postings`, `jp_scores`, `jp_applications`, `jp_interview_sessions`, `jp_usage_counters`, `jp_pipeline_state`（刷新锁 / TTL）。全部启用 RLS。
+数据模型：`jp_users`, `jp_profiles`, `jp_companies`, `jp_postings`, `jp_scores`, `jp_applications`, `jp_interview_sessions`, `jp_usage_counters`, `jp_pipeline_state`（刷新锁 / TTL）。全部启用 RLS。
 
 ## 脚本
 

@@ -54,7 +54,7 @@ shadcn            — shadcn/ui CLI for component scaffolding
 
 | What | Where | Type |
 |---|---|---|
-| User data | Supabase Postgres (remote) | Managed via `npx supabase db push` — tables: `jp_users`, `jp_profiles`, `jp_resumes`, `jp_companies`, `jp_postings`, `jp_scores`, `jp_applications`, `jp_interview_sessions`, `jp_usage_counters` |
+| User data | Supabase Postgres (remote) | Managed via `npx supabase db push` — tables: `jp_users`, `jp_profiles`, `jp_companies`, `jp_postings`, `jp_scores`, `jp_applications`, `jp_interview_sessions`, `jp_usage_counters` |
 | File uploads | Supabase Storage bucket `jp_resumes` | Private, per-user folders |
 | Auth sessions | Supabase Auth | Magic-link only, PKCE flow, 1h token expiry |
 

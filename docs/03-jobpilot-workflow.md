@@ -274,7 +274,6 @@ Invalid transitions are rejected by `assertTransition` in `src/lib/applications/
 |---|---|---|
 | `jp_users` | Auth signup trigger | Billing / digest |
 | `jp_profiles` | Resume upload / profile PUT | Scoring, Matches gate; `resume_fingerprint` written by pipeline rescore |
-| `jp_resumes` | Resume upload (multi-resume support) | Profile page, scoring |
 | `jp_companies` | Seed SQL | Poller |
 | `jp_postings` | Poller (6 ATS sources); stale-sweep sets `is_active=false` | Scoring, Browse page, Matches join |
 | `jp_scores` | Score run / cron / pipeline rescore | Matches list |
