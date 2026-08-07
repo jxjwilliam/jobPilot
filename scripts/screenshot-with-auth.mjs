@@ -1,16 +1,17 @@
 #!/usr/bin/env node
-// ─── screenshot-with-auth.mjs (FIXED v2 — cookie-injection) ──────────────
-// Pipeline: Admin API → REST session → cookie injection → screenshots → README
+// ─── screenshot-with-auth.mjs (v3 — localStorage-injection) ─────────────
+// Pipeline: Admin API → REST session → localStorage injection → screenshots
 //
 // Usage:
 //   node --env-file=.env.local scripts/screenshot-with-auth.mjs
 //
-// FIX: Instead of navigating to the hash-based magic link URL (which requires
-//      client-side JS to process), we:
+// Sessions now live in localStorage (iframe-safe; cookies are blocked in
+// cross-origin iframes and the server can no longer read them), so we:
 //   1. Get email OTP via Supabase admin API (no email sent)
 //   2. Exchange OTP for session via Supabase REST /auth/v1/verify
-//   3. Inject the session cookie directly into Playwright's browser context
-//   4. This works because @supabase/ssr reads the session from cookies
+//   3. Inject the session JSON into localStorage under
+//      `sb-{project_ref}-auth-token` (the @supabase/supabase-js key)
+//   4. The browser client picks it up exactly like a real sign-in
 //
 // If REST API fails or login verification fails → STOP immediately.
 // ───────────────────────────────────────────────────────────────────────────
@@ -27,7 +28,7 @@ const PROJECT_ROOT = path.resolve(__dirname, "..");
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const APP_URL = "http://localhost:3000";
+const APP_URL = process.env.APP_URL ?? "http://localhost:5200";
 const OUTPUT_DIR = path.resolve(PROJECT_ROOT, "screenshots");
 const VIEWPORT = { width: 1440, height: 900 };
 
@@ -35,7 +36,8 @@ const PROJECT_REF = SUPABASE_URL
   ? new URL(SUPABASE_URL).hostname.split(".")[0]
   : null;
 
-const COOKIE_NAME = `sb-${PROJECT_REF}-auth-token`;
+// @supabase/supabase-js persists the session in localStorage under this key.
+const AUTH_STORAGE_KEY = `sb-${PROJECT_REF}-auth-token`;
 
 // All routes to screenshot (in navigation order)
 const ROUTES = [
@@ -122,39 +124,36 @@ async function getSessionFromAPI() {
   return session;
 }
 
-// ── Step 2: Set cookie and verify login ────────────────────────────────
-async function loginWithCookie(session) {
+// ── Step 2: Inject session into localStorage and verify login ───────────
+async function loginWithSession(session) {
   console.log("\n" + "=".repeat(50));
-  console.log("  STEP 2: Inject session cookie and verify login");
+  console.log("  STEP 2: Inject session into localStorage and verify login");
   console.log("=".repeat(50));
 
-  const cookieValue = JSON.stringify(session);
-  console.log(`  Cookie: ${COOKIE_NAME}`);
+  const sessionJson = JSON.stringify(session);
+  console.log(`  Storage key: ${AUTH_STORAGE_KEY}`);
 
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ viewport: VIEWPORT });
   const page = await context.newPage();
 
   try {
-    // First visit the domain to establish it
+    // First visit the domain to establish the origin for localStorage
     console.log("  Visiting localhost to set domain...");
     await page.goto(APP_URL, { waitUntil: "domcontentloaded", timeout: 10000 });
 
-    // Set the session cookie (raw JSON — @supabase/ssr handles both raw and base64url)
-    await context.addCookies([{
-      name: COOKIE_NAME,
-      value: cookieValue,
-      domain: "localhost",
-      path: "/",
-    }]);
+    // Seed the localStorage session exactly as a real sign-in would store it.
+    await page.evaluate(
+      ([key, value]) => localStorage.setItem(key, value),
+      [AUTH_STORAGE_KEY, sessionJson]
+    );
 
-    // Verify cookie was set
-    const cookies = await context.cookies();
-    const authCookie = cookies.find(c => c.name === COOKIE_NAME);
-    if (!authCookie) {
-      throw new Error("Failed to set auth cookie");
+    // Verify the session was stored
+    const stored = await page.evaluate((key) => localStorage.getItem(key), AUTH_STORAGE_KEY);
+    if (!stored) {
+      throw new Error("Failed to set auth session in localStorage");
     }
-    console.log("  ✅ Cookie set successfully");
+    console.log("  ✅ Session stored in localStorage");
 
     // Navigate to protected page to verify login
     console.log("  Verifying: navigating to /matches...");
@@ -167,7 +166,7 @@ async function loginWithCookie(session) {
 
     if (currentUrl.includes("/login")) {
       console.error(`\n  ❌ LOGIN FAILED — redirected to /login.`);
-      console.error("     The session cookie was not accepted by the server.");
+      console.error("     The localStorage session was not accepted by the app.");
       console.error("     Stopping. No screenshots taken.\n");
       await browser.close();
       return { success: false, browser: null, page: null };
@@ -272,7 +271,7 @@ function injectReadme(readmePath, markdownBlock) {
 
 // ── Main ──────────────────────────────────────────────────────────────
 async function main() {
-  console.log("\n🚀  JobPilot Screenshot Pipeline (cookie-injection)\n");
+  console.log("\n🚀  JobPilot Screenshot Pipeline (localStorage-injection)\n");
 
   // Phase 1: Get session via REST API
   const session = await getSessionFromAPI();
@@ -281,8 +280,8 @@ async function main() {
     process.exit(1);
   }
 
-  // Phase 2: Inject cookie and verify login
-  const loginResult = await loginWithCookie(session);
+  // Phase 2: Inject session and verify login
+  const loginResult = await loginWithSession(session);
   if (!loginResult.success) {
     console.log("\n❌  ABORTED — Login verification failed. No screenshots taken.\n");
     process.exit(1);

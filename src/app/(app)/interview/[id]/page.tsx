@@ -1,5 +1,6 @@
 "use client";
 
+import { apiFetch } from "@/lib/api";
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
@@ -85,7 +86,7 @@ export default function InterviewPage() {
     setGenerating(true);
     setError(null);
     try {
-      const res = await fetch("/api/interview/generate", {
+      const res = await apiFetch("/api/interview/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ posting_id: postingId }),
@@ -125,7 +126,7 @@ export default function InterviewPage() {
     setError(null);
 
     try {
-      const res = await fetch("/api/interview/evaluate", {
+      const res = await apiFetch("/api/interview/evaluate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

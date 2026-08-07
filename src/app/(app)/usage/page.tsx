@@ -1,5 +1,6 @@
 "use client";
 
+import { apiFetch } from "@/lib/api";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
@@ -23,7 +24,7 @@ function UsagePageInner() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/usage");
+      const res = await apiFetch("/api/usage");
       const body = (await res.json()) as UsagePayload & { error?: string };
       if (!res.ok) throw new Error(body.error ?? "Failed to load usage");
       setUsage(body);
@@ -42,7 +43,7 @@ function UsagePageInner() {
     setUpgrading(true);
     setError(null);
     try {
-      const res = await fetch("/api/billing/portal");
+      const res = await apiFetch("/api/billing/portal");
       const body = (await res.json()) as { url?: string; error?: string };
       if (!res.ok || !body.url) {
         throw new Error(body.error ?? "Failed to open billing portal");

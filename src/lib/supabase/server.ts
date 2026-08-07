@@ -1,27 +1,44 @@
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import "server-only";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import type { NextRequest } from "next/server";
 
-export async function createClient() {
-  const cookieStore = await cookies();
+/**
+ * Server auth for browser requests.
+ *
+ * Browser sessions live in localStorage (iframe-safe, see client.ts), so the
+ * server never sees a session cookie. API routes resolve the user from the
+ * `Authorization: Bearer <access_token>` header attached by apiFetch() and
+ * run all .from() queries through a client bound to that JWT so RLS applies.
+ */
+export function getAccessToken(request: NextRequest): string | null {
+  const header = request.headers.get("authorization");
+  if (!header) return null;
+  return header.replace(/^Bearer\s+/i, "").trim() || null;
+}
 
-  return createServerClient(
+export function createAuthedClient(request: NextRequest) {
+  const token = getAccessToken(request);
+  return createSupabaseClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            );
-          } catch {
-            // Called from a Server Component; middleware can refresh sessions.
-          }
-        },
-      },
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: token
+        ? { headers: { Authorization: `Bearer ${token}` } }
+        : {},
     }
   );
+}
+
+export async function getSessionUser(request: NextRequest) {
+  const accessToken = getAccessToken(request);
+  const supabase = createAuthedClient(request);
+  if (!accessToken) return { user: null, supabase, accessToken: null };
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser(accessToken);
+
+  if (!user) return { user: null, supabase, accessToken };
+  return { user, supabase, accessToken };
 }

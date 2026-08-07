@@ -160,3 +160,20 @@ npm run build  # 生产构建
 ## 账户删除
 
 **Profile → Danger zone** → `DELETE /api/account/delete` 删除 `jp_resumes` 存储桶 `{user_id}/` 下的对象，并删除认证用户（FK 级联）。
+
+<!-- screenshots -->
+## Screenshots
+
+| Home | Login | Matches |
+| --- | --- | --- |
+| ![Home](screenshots/home.png) | ![Login](screenshots/login.png) | ![Matches](screenshots/matches.png) |
+
+| Applications | Profile | Onboarding |
+| --- | --- | --- |
+| ![Applications](screenshots/applications.png) | ![Profile](screenshots/profile.png) | ![Onboarding](screenshots/onboarding.png) |
+
+| Usage |
+| --- |
+| ![Usage](screenshots/usage.png) |
+
+<!-- /screenshots -->

@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getSessionUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   isResumePopulated,
@@ -12,12 +12,8 @@ import {
 import { ParsedResumeSchema } from "@/lib/llm/schemas";
 
 /** Re-run LLM extraction on the already-uploaded resume file. */
-export async function POST() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+export async function POST(request: NextRequest) {
+  const { supabase, user } = await getSessionUser(request);
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

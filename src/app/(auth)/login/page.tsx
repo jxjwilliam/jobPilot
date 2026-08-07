@@ -1,16 +1,24 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, Suspense, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { JobPilotLogo } from "@/components/brand/JobPilotLogo";
 
-export default function LoginPage() {
+function LoginForm() {
   const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "sent" | "error">(
     "idle"
   );
+  const [verifying, setVerifying] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = searchParams.get("next") ?? "";
+
+  const inIframe = typeof window !== "undefined" && window.self !== window.top;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -19,10 +27,13 @@ export default function LoginPage() {
 
     const supabase = createClient();
     const origin = window.location.origin;
+    const redirectTo = `${origin}/auth/callback${
+      next ? `?next=${encodeURIComponent(next)}` : ""
+    }`;
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${origin}/auth/callback`,
+        emailRedirectTo: redirectTo,
       },
     });
 
@@ -33,6 +44,28 @@ export default function LoginPage() {
     }
 
     setStatus("sent");
+  }
+
+  async function handleVerifyCode(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setVerifying(true);
+    setErrorMessage(null);
+
+    const supabase = createClient();
+    const { error } = await supabase.auth.verifyOtp({
+      email,
+      token: code.trim(),
+      type: "email",
+    });
+
+    if (error) {
+      setErrorMessage(error.message);
+      setVerifying(false);
+      return;
+    }
+
+    router.replace(next.startsWith("/") ? next : "/matches");
+    router.refresh();
   }
 
   return (
@@ -47,9 +80,52 @@ export default function LoginPage() {
         </p>
 
         {status === "sent" ? (
-          <p className="mt-8 rounded-md border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm">
-            Check your email for a magic link to continue.
-          </p>
+          <div className="mt-8 space-y-4">
+            <p className="rounded-md border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm">
+              Check your email for a magic link to continue.
+            </p>
+            {inIframe ? (
+              <p className="text-sm text-neutral-600">
+                If the magic link opens in a new tab, enter the 6-digit code
+                from the email below to finish signing in here.
+              </p>
+            ) : null}
+            <form onSubmit={handleVerifyCode} className="space-y-4">
+              <label className="block text-sm font-medium" htmlFor="code">
+                {inIframe ? "Verification code from email" : "Code from email"}
+                <input
+                  id="code"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  required
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-neutral-300 px-3 py-2 text-base outline-none focus:border-neutral-900"
+                  placeholder="123456"
+                />
+              </label>
+              {errorMessage ? (
+                <p className="text-sm text-red-600" role="alert">
+                  {errorMessage}
+                </p>
+              ) : null}
+              <button
+                type="submit"
+                disabled={verifying}
+                className="w-full rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+              >
+                {verifying ? "Verifying…" : "Verify code"}
+              </button>
+            </form>
+            <button
+              type="button"
+              onClick={() => setStatus("idle")}
+              className="w-full text-center text-sm text-neutral-600 underline-offset-2 hover:underline"
+            >
+              Try a different email
+            </button>
+          </div>
         ) : (
           <form onSubmit={handleSubmit} className="mt-8 space-y-4">
             <label className="block text-sm font-medium" htmlFor="email">
@@ -81,5 +157,19 @@ export default function LoginPage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen flex-col items-center justify-center p-8">
+          <p className="text-sm text-neutral-600">Loading…</p>
+        </main>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }

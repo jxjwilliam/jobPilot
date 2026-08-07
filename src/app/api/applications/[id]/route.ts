@@ -1,18 +1,13 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getSessionUser } from "@/lib/supabase/server";
 import { assertTransition } from "@/lib/applications/status";
 import {
   ParsedResumeSchema,
   type ParsedResume,
 } from "@/lib/llm/schemas";
 
-async function requireUser() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { supabase, user: null as null };
-  return { supabase, user };
+async function requireUser(request: NextRequest) {
+  return getSessionUser(request);
 }
 
 type StatusHistoryEntry = { status: string; timestamp: string };
@@ -29,10 +24,10 @@ function asHistory(value: unknown): StatusHistoryEntry[] {
 }
 
 export async function GET(
-  _request: Request,
+  request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const { supabase, user } = await requireUser();
+  const { supabase, user } = await requireUser(request);
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -117,10 +112,10 @@ export async function GET(
 }
 
 export async function PATCH(
-  request: Request,
+  request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const { supabase, user } = await requireUser();
+  const { supabase, user } = await requireUser(request);
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

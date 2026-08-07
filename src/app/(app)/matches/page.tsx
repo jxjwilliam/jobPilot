@@ -1,5 +1,6 @@
 "use client";
 
+import { apiFetch } from "@/lib/api";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Sparkles, FileText, Filter } from "lucide-react";
@@ -110,9 +111,9 @@ export default function MatchesPage() {
     setError(null);
     try {
       const [res, allRes, statsRes] = await Promise.all([
-        fetch(`/api/postings?${queryString}`),
-        fetch(`/api/postings?min_score=0`),
-        fetch("/api/stats"),
+        apiFetch(`/api/postings?${queryString}`),
+        apiFetch(`/api/postings?min_score=0`),
+        apiFetch("/api/stats"),
       ]);
       const data = (await res.json()) as {
         postings?: MatchedPosting[];
@@ -182,7 +183,7 @@ export default function MatchesPage() {
     setScoringProgress(null);
 
     try {
-      const res = await fetch("/api/score/run", {
+      const res = await apiFetch("/api/score/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ limit: 20, stream: true, force }),
@@ -266,7 +267,7 @@ export default function MatchesPage() {
     setTailoringId(postingId);
     setError(null);
     try {
-      const res = await fetch("/api/applications", {
+      const res = await apiFetch("/api/applications", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ posting_id: postingId }),

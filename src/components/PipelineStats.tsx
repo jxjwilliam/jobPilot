@@ -1,5 +1,6 @@
 "use client";
 
+import { apiFetch } from "@/lib/api";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -33,7 +34,7 @@ export function PipelineStats() {
     let ignore = false;
     async function load() {
       try {
-        const res = await fetch("/api/stats");
+        const res = await apiFetch("/api/stats");
         if (!res.ok) return;
         const data = (await res.json()) as PipelineStatsData;
         if (!ignore) setStats(data);

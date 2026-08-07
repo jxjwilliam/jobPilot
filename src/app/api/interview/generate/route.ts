@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getSessionUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getLlmClient, getLlmModel } from "@/lib/llm/client";
 import { getCompletionText } from "@/lib/llm/message-text";
@@ -31,12 +31,8 @@ Return ONLY valid JSON (no markdown):
   ]
 }`;
 
-export async function POST(request: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+export async function POST(request: NextRequest) {
+  const { supabase, user } = await getSessionUser(request);
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

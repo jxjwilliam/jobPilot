@@ -74,7 +74,7 @@ Even if you had email access, each Playwright run would consume a rate-limited s
                            ▼
                     ┌──────────────┐
                     │  exchange    │
-                    │  code for    │──▶ session cookie set
+                    │  code for    │──▶ localStorage session
                     │  session     │
                     └──────────────┘
 ```
@@ -84,10 +84,10 @@ Even if you had email access, each Playwright run would consume a rate-limited s
 | File | Role |
 |---|---|
 | `src/lib/supabase/client.ts` | Browser client (used by Login page) |
-| `src/lib/supabase/server.ts` | Server client (reads cookies from Next.js) |
+| `src/lib/supabase/server.ts` | Server auth — resolves the user from the `Authorization: Bearer` token via `getSessionUser()` |
 | `src/lib/supabase/admin.ts` | **Admin client** — uses `SUPABASE_SERVICE_ROLE_KEY`, bypasses all rate limits. This is our escape hatch. |
 | `src/app/(auth)/login/page.tsx` | Login UI — calls `signInWithOtp` |
-| `src/app/auth/callback/route.ts` | Magic link callback — exchanges code for session |
+| `src/app/auth/callback/page.tsx` | Magic link callback — client-side code exchange (localStorage) |
 
 ### The escape hatch
 
@@ -109,7 +109,7 @@ This client has **admin privileges** — it can generate magic links, create use
 The idea is simple:
 
 1. Use the Admin API (`supabase.auth.admin.generateLink()`) to produce a valid magic link URL — **no email is sent**.
-2. Have Playwright navigate directly to that URL — this exchanges the code for a session cookie.
+2. Have Playwright navigate directly to that URL — this exchanges the code and stores the session in localStorage.
 3. Now Playwright is authenticated as if it clicked a real magic link.
 4. **Save the session** (`storageState`) so all subsequent screenshot runs load instantly without any auth step.
 
@@ -252,10 +252,9 @@ main().catch(console.error);
 ### How it works
 
 When Playwright calls `browser.newContext({ storageState: "auth-state.json" })`, it loads:
-- **Cookies** — including the Supabase session cookie (`sb-<project>-auth-token`)
-- **Local storage** — any persisted session data
+- **Local storage** — including the Supabase session (`sb-<project>-auth-token`), which the browser client reads directly
 
-The server-side middleware (`src/middleware.ts`) sees the valid session cookie and lets the request through — exactly as if you'd logged in via the browser.
+The client-side guard in `src/app/(app)/layout.tsx` reads the session from localStorage and the API routes authenticate via the Bearer token attached by `apiFetch()` — exactly as if you'd logged in via the browser.
 
 ### When to re-run setup-auth
 

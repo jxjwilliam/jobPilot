@@ -1,5 +1,6 @@
 "use client";
 
+import { apiFetch } from "@/lib/api";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ParsedResume } from "@/lib/llm/schemas";
@@ -118,7 +119,7 @@ export default function ProfilePage() {
     setError(null);
     setStatus(null);
     try {
-      const res = await fetch("/api/account/delete", { method: "DELETE" });
+      const res = await apiFetch("/api/account/delete", { method: "DELETE" });
       const data = (await res.json()) as { ok?: boolean; error?: string };
       if (!res.ok) {
         throw new Error(data.error ?? "Could not delete account");

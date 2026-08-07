@@ -1,5 +1,6 @@
 "use client";
 
+import { apiFetch } from "@/lib/api";
 import type { ParsedResume } from "@/lib/llm/schemas";
 import type { Preferences } from "@/lib/profile/types";
 
@@ -10,7 +11,7 @@ export type ProfilePayload = {
 };
 
 export async function fetchProfile(): Promise<ProfilePayload> {
-  const res = await fetch("/api/profile");
+  const res = await apiFetch("/api/profile");
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(body.error ?? "Failed to load profile");
@@ -29,7 +30,7 @@ export async function saveProfile(payload: {
     await new Promise((r) => setTimeout(r, 0));
   }
 
-  const res = await fetch("/api/profile", {
+  const res = await apiFetch("/api/profile", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -53,7 +54,7 @@ export async function uploadResume(file: File): Promise<
 > {
   const form = new FormData();
   form.append("file", file);
-  const res = await fetch("/api/profile/resume", {
+  const res = await apiFetch("/api/profile/resume", {
     method: "POST",
     body: form,
   });
@@ -71,7 +72,7 @@ export async function uploadResume(file: File): Promise<
 export async function reparseResume(): Promise<
   ProfilePayload & { parse_error?: string | null; autofilled?: boolean }
 > {
-  const res = await fetch("/api/profile/resume/reparse", { method: "POST" });
+  const res = await apiFetch("/api/profile/resume/reparse", { method: "POST" });
   const body = (await res.json().catch(() => ({}))) as ProfilePayload & {
     error?: string;
     parse_error?: string | null;

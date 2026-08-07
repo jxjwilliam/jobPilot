@@ -1,24 +1,38 @@
+"use client";
+
+import { useEffect } from "react";
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { apiFetch } from "@/lib/api";
 import { isProfileIncomplete } from "@/lib/profile/complete";
 import { JobPilotLogo } from "@/components/brand/JobPilotLogo";
 
-export default async function Home() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+export default function Home() {
+  const router = useRouter();
 
-  if (user) {
-    const { data: profile } = await supabase
-      .from("jp_profiles")
-      .select("resume_raw_url, resume_parsed")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    redirect(isProfileIncomplete(profile) ? "/onboarding" : "/matches");
-  }
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) return;
+      let destination = "/matches";
+      try {
+        const res = await apiFetch("/api/profile");
+        if (res.ok) {
+          const profile = (await res.json()) as {
+            resume_raw_url: string | null;
+            resume_parsed: { skills?: unknown[] } | null;
+          };
+          destination = isProfileIncomplete(profile)
+            ? "/onboarding"
+            : "/matches";
+        }
+      } catch {
+        // keep /matches as the default destination
+      }
+      router.replace(destination);
+    });
+  }, [router]);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-8">

@@ -1,5 +1,6 @@
 "use client";
 
+import { apiFetch } from "@/lib/api";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { ClipboardList } from "lucide-react";
@@ -56,7 +57,7 @@ export default function ApplicationsPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/applications");
+      const res = await apiFetch("/api/applications");
       const data = (await res.json()) as {
         applications?: ApplicationCard[];
         error?: string;
@@ -80,7 +81,7 @@ export default function ApplicationsPage() {
     setMovingId(id);
     setError(null);
     try {
-      const res = await fetch(`/api/applications/${id}`, {
+      const res = await apiFetch(`/api/applications/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),

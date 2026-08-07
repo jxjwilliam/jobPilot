@@ -75,7 +75,7 @@ Playwright 输入邮箱 → 点击"发送" → ... 但无法在邮件中点击�
                            ▼
                     ┌──────────────┐
                     │  交换 code   │
-                    │  获取 session │──▶ 设置 session cookie
+                    │  获取 session │──▶ localStorage 会话
                     │              │
                     └──────────────┘
 ```
@@ -85,10 +85,10 @@ Playwright 输入邮箱 → 点击"发送" → ... 但无法在邮件中点击�
 | 文件 | 作用 |
 |---|---|
 | `src/lib/supabase/client.ts` | 浏览器端客户端（登录页面使用） |
-| `src/lib/supabase/server.ts` | 服务端客户端（从 Next.js 读取 cookie） |
+| `src/lib/supabase/server.ts` | 服务端认证 — 通过 `getSessionUser()` 从 `Authorization: Bearer` 头解析用户 |
 | `src/lib/supabase/admin.ts` | **管理员客户端** — 使用 `SUPABASE_SERVICE_ROLE_KEY`，绕过所有频率限制。这是我们的逃生出口。 |
 | `src/app/(auth)/login/page.tsx` | 登录页面 UI — 调用 `signInWithOtp` |
-| `src/app/auth/callback/route.ts` | 魔法链接回调 — 交换 code 获取 session |
+| `src/app/auth/callback/page.tsx` | 魔法链接回调 — 客户端交换 code（localStorage） |
 
 ### 逃生出口
 
@@ -111,7 +111,7 @@ export function createAdminClient() {
 核心思路：
 
 1. 使用 Admin API（`supabase.auth.admin.generateLink()`）生成一个有效的魔法链接 URL — **不会真正发送邮件**。
-2. 让 Playwright 直接访问该 URL — 这会自动完成 code 交换，设置 session cookie。
+2. 让 Playwright 直接访问该 URL — 这会自动完成 code 交换，并把 session 存入 localStorage。
 3. Playwright 现在已登录，就像点击了真实的魔法链接一样。
 4. **保存会话**（`storageState`），后续截图运行直接加载，无需再次认证。
 
@@ -255,10 +255,9 @@ main().catch(console.error);
 ### 原理
 
 当 Playwright 调用 `browser.newContext({ storageState: "auth-state.json" })` 时，会加载：
-- **Cookies** — 包括 Supabase session cookie（`sb-<project>-auth-token`）
-- **Local storage** — 任何持久化的会话数据
+- **Local storage** — 包括 Supabase 会话（`sb-<project>-auth-token`），浏览器端客户端直接读取
 
-服务端中间件（`src/middleware.ts`）看到有效的 session cookie，就会通过请求 — 和你在浏览器中真实登录完全一样。
+客户端守卫（`src/app/(app)/layout.tsx`）从 localStorage 读取会话，API 路由通过 `apiFetch()` 附加的 Bearer token 认证 — 和你在浏览器中真实登录完全一样。
 
 ### 何时需要重新运行 setup-auth
 

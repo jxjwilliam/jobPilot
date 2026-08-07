@@ -1,15 +1,10 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getSessionUser } from "@/lib/supabase/server";
 import { DEFAULT_MIN_SCORE, filterByMinScore } from "@/lib/scoring/score";
 import { markAndFilterApplied } from "@/lib/matches/applied";
 
-async function requireUser() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { supabase, user: null as null };
-  return { supabase, user };
+async function requireUser(request: NextRequest) {
+  return getSessionUser(request);
 }
 
 function daysAgoIso(days: number): string {
@@ -18,8 +13,8 @@ function daysAgoIso(days: number): string {
   return d.toISOString();
 }
 
-export async function GET(request: Request) {
-  const { supabase, user } = await requireUser();
+export async function GET(request: NextRequest) {
+  const { supabase, user } = await requireUser(request);
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

@@ -1,5 +1,6 @@
 "use client";
 
+import { apiFetch } from "@/lib/api";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Sparkles, MapPin, Clock, ExternalLink } from "lucide-react";
@@ -84,7 +85,7 @@ export default function BrowsePage() {
       params.set("page", String(page));
       params.set("per_page", "20");
 
-      const res = await fetch(`/api/postings/browse?${params.toString()}`);
+      const res = await apiFetch(`/api/postings/browse?${params.toString()}`);
       const data = (await res.json()) as {
         postings?: BrowsePosting[];
         total?: number;
@@ -110,7 +111,7 @@ export default function BrowsePage() {
     let ignore = false;
     async function loadPipelineStatus() {
       try {
-        const res = await fetch("/api/pipeline/status");
+        const res = await apiFetch("/api/pipeline/status");
         if (!res.ok) return;
         const data = (await res.json()) as {
           last_poll_at: string | null;
@@ -133,7 +134,7 @@ export default function BrowsePage() {
   async function refreshJobs() {
     setRefreshing(true);
     try {
-      await fetch("/api/pipeline/run", {
+      await apiFetch("/api/pipeline/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: "{}",
@@ -142,7 +143,7 @@ export default function BrowsePage() {
       const deadline = Date.now() + 120_000;
       while (Date.now() < deadline) {
         await new Promise((resolve) => setTimeout(resolve, 2000));
-        const res = await fetch("/api/pipeline/status");
+        const res = await apiFetch("/api/pipeline/status");
         if (!res.ok) break;
         const data = (await res.json()) as {
           last_poll_at: string | null;
@@ -164,7 +165,7 @@ export default function BrowsePage() {
     setScoringId(postingId);
     try {
       // We need a single-job scoring endpoint. For now, navigate to matches.
-      const res = await fetch("/api/score/run", {
+      const res = await apiFetch("/api/score/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ limit: 1 }),

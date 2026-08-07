@@ -9,7 +9,7 @@ Two AI agent skills that turn a live web app into a polished demo video.
 Tell your agent "screenshot my app" and it:
 
 1. Discovers all routes from the live DOM (nav links, tabs, etc.)
-2. Logs in via cookie injection (auth-protected apps)
+2. Logs in via localStorage session injection (auth-protected apps)
 3. Captures every page at 1440×900
 4. Injects a clean markdown table into your README
 
@@ -38,7 +38,7 @@ Live app → /screenshot-ui → real screenshots → README
 
 **Applied to JobPilot** (Next.js + Supabase, auth-protected):
 
-1. **`/screenshot-ui`** → `scripts/screenshot-with-auth.mjs` logs in via Supabase admin API → cookie injection → captures 7 routes (home, login, matches, applications, profile, onboarding, usage) → injects into README
+1. **`/screenshot-ui`** → `scripts/screenshot-with-auth.mjs` logs in via Supabase admin API → localStorage session injection → captures 7 routes (home, login, matches, applications, profile, onboarding, usage) → injects into README
 2. **`/demo-video`** → 8 HTML scene files, each with a screenshot as hero + gradient overlay + tagline → Playwright screenshots each scene at 1920×1080 → ffmpeg composites with crossfade → `output.mp4`
 3. **Result**: 35-second product walkthrough, 1920×1080, H.264+AAC, 1.5MB
 

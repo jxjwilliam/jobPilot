@@ -1,5 +1,6 @@
 "use client";
 
+import { apiFetch } from "@/lib/api";
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { Mail, Clock } from "lucide-react";
@@ -130,7 +131,7 @@ export default function ApplicationDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/applications/${id}`);
+      const res = await apiFetch(`/api/applications/${id}`);
       const data = (await res.json()) as {
         application?: ApplicationDetail;
         posting?: PostingSummary;
@@ -167,7 +168,7 @@ export default function ApplicationDetailPage() {
     body: BodyInit | undefined,
     label: string
   ): Promise<void> {
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       method: "POST",
       headers: body ? { "Content-Type": "application/json" } : undefined,
       body,
@@ -249,7 +250,7 @@ export default function ApplicationDetailPage() {
     setBusy("save");
     setError(null);
     try {
-      const res = await fetch(`/api/applications/${id}`, {
+      const res = await apiFetch(`/api/applications/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tailored_cover_letter: coverLetter }),
@@ -278,7 +279,7 @@ export default function ApplicationDetailPage() {
     setError(null);
     setFollowUpResult(null);
     try {
-      const res = await fetch(`/api/applications/${id}/follow-up`, {
+      const res = await apiFetch(`/api/applications/${id}/follow-up`, {
         method: "POST",
       });
       const data = (await res.json()) as {
@@ -308,7 +309,7 @@ export default function ApplicationDetailPage() {
       if (coverDirty) {
         payload.tailored_cover_letter = coverLetter;
       }
-      const res = await fetch(`/api/applications/${id}`, {
+      const res = await apiFetch(`/api/applications/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

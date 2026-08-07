@@ -1,16 +1,11 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getSessionUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { streamTailorApplication } from "@/lib/tailoring/tailor";
 import { createSseStream } from "@/lib/stream/sse";
 
-async function requireUser() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { supabase, user: null as null };
-  return { supabase, user };
+async function requireUser(request: NextRequest) {
+  return getSessionUser(request);
 }
 
 /**
@@ -19,10 +14,10 @@ async function requireUser() {
  * Streams SSE: resume_start → resume_done → cover_start → cover_done → done.
  */
 export async function POST(
-  request: Request,
+  request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const { user } = await requireUser();
+  const { user } = await requireUser(request);
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

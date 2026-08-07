@@ -7,7 +7,7 @@ Next.js 15 App Router · Supabase (auth + Postgres + Storage) · Tailwind CSS v3
 ## Commands
 
 ```bash
-npm run dev        # Next.js with Turbopack (port 3000)
+npm run dev        # Next.js with Turbopack (port 5200)
 npm test           # Vitest — 39 tests across 9 files
 npm run build      # production build
 
@@ -41,24 +41,29 @@ Vercel deploy needs Vercel project linked; `.vercel/` is gitignored.
 
 **Magic-link only.** No password login. The login page calls `supabase.auth.signInWithOtp()` — rate-limited to 2 emails/hour per address by Supabase free tier.
 
-**Crucial:** `createServerClient` (server + middleware) forces `flowType: "pkce"`. The browser client (`createBrowserClient`) is **not** initialized in the root layout — only in the login page. This means hash-based auth tokens (`/#access_token=...`) are never processed client-side.
+**Iframe-safe sessions (localStorage, not cookies).** The browser client (`src/lib/supabase/client.ts`) is a plain `@supabase/supabase-js` client with `flowType: "pkce"` and `persistSession: true`, so sessions + PKCE verifiers live in **localStorage** — origin-scoped and not blocked in cross-origin iframes the way third-party cookies are. The server never sees a session cookie, so:
+
+- **API routes** authenticate via `getSessionUser(request)` (`src/lib/supabase/server.ts`), which reads the `Authorization: Bearer <access_token>` header attached by `apiFetch()` (`src/lib/api.ts`). All user API calls go through `apiFetch()`.
+- **Route protection is client-side**: `(app)/layout.tsx` checks `supabase.auth.getSession()` and redirects to `/login?next={path}` when signed out. There is **no middleware**.
+- **Auth callback** (`/auth/callback`) is a client page that exchanges the PKCE code with `exchangeCodeForSession()`; the session lands in the same localStorage origin as the app (also closes OAuth popups).
+- **Login in an iframe**: the magic-link email includes a 6-digit OTP. Inside an iframe (`window.self !== window.top`) the login page shows a code field so the user can finish signing in without leaving the iframe — the link alone can't propagate to the iframe because browsers partition storage by top-level site. Top-level users can still just click the link.
 
 ### Playwright screenshot auth (the working approach)
 
-Do NOT navigate to the Supabase magic link URL. Instead, inject the session cookie directly:
+Do NOT navigate to the Supabase magic link URL. Instead, inject the session into localStorage directly:
 
 1. Call `supabase.auth.admin.generateLink({ type: "magiclink", email })` → get `email_otp`
 2. POST `{email, token: email_otp, type: "magiclink"}` to `{SUPABASE_URL}/auth/v1/verify` → get `access_token`, `refresh_token`, `user`
-3. Set cookie `sb-{project_ref}-auth-token` = `JSON.stringify({access_token, refresh_token, expires_in, expires_at, token_type, user})`
-4. The `@supabase/ssr` server client reads raw JSON cookies (no base64 encoding needed)
+3. Set localStorage `sb-{project_ref}-auth-token` = `JSON.stringify({access_token, refresh_token, expires_in, expires_at, token_type, user})`
+4. The browser client (`@supabase/supabase-js`) reads it from localStorage exactly like a real sign-in
 
 See `scripts/screenshot-with-auth.mjs` for the full implementation.
 
 ### Protected routes
 
-Middleware guards: `/matches`, `/browse`, `/onboarding`, `/applications`, `/applications/*`, `/interview`, `/interview/*`, `/profile`, `/usage`. Unauthenticated requests redirect to `/login?next={path}`.
+The `(app)` layout guards: `/matches`, `/browse`, `/onboarding`, `/applications`, `/applications/*`, `/interview`, `/interview/*`, `/profile`, `/usage`. Unauthenticated requests redirect to `/login?next={path}`.
 
-Root `/` checks session server-side: logged-in users redirect to `/onboarding` (no resume) or `/matches`.
+Root `/` checks the session client-side: logged-in users redirect to `/onboarding` (no resume) or `/matches`.
 
 ## Routes
 
@@ -66,6 +71,7 @@ Root `/` checks session server-side: logged-in users redirect to `/onboarding` (
 src/app/
   page.tsx              # Landing page (redirects authed users)
   (auth)/login/page.tsx # Magic link form
+  auth/callback/page.tsx # Client-side PKCE exchange (exchanges code, stores in localStorage)
   (app)/                # Authenticated layout (+ AppNav)
     matches/page.tsx     # Scored jobs + streaming auto-score + tailor + interview buttons
     browse/page.tsx      # All active postings: search, filter, paginate
@@ -181,11 +187,11 @@ Uses `openai` SDK pointed at any OpenAI-compatible API (`OPENAI_COMPATIBLE_BASE_
 Script at `scripts/screenshot-with-auth.mjs`. Pipeline:
 1. Admin API → email OTP (no email sent)
 2. REST `/auth/v1/verify` → session tokens
-3. Inject `sb-{project_ref}-auth-token` cookie into Playwright
+3. Inject `sb-{project_ref}-auth-token` into localStorage via Playwright
 4. Verify login on `/matches` — if redirected to `/login`, abort
 5. Screenshot 7 routes: `/`, `/login`, `/matches`, `/applications`, `/profile`, `/onboarding`, `/usage`
 6. Inject markdown table into `README.md` + `README-zh.md` between `<!-- screenshots -->` markers
 
 Re-run: `node --env-file=.env.local scripts/screenshot-with-auth.mjs`
 
-Requires: `PLAYWRIGHT` devDependency installed, `npx playwright install chromium` run once, dev server on port 3000.
+Requires: `PLAYWRIGHT` devDependency installed, `npx playwright install chromium` run once, dev server on port 5200.
