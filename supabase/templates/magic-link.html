@@ -1,0 +1,13 @@
+<h2>Your sign-in link</h2>
+
+<p>Follow the link below to sign in. This link expires shortly and can only be used once.</p>
+
+<p><a href="{{ .ConfirmationURL }}">Sign in</a></p>
+
+<p>Signing in inside an embedded app? The link can only open in a new tab and won't
+reach the embedded window. In that case, enter this 6-digit verification code on the
+sign-in page instead:</p>
+
+<p style="font-size: 22px; font-weight: 600; letter-spacing: 4px;">{{ .Token }}</p>
+
+<p>If you didn't request this email, you can safely ignore it.</p>

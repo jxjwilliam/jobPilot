@@ -47,6 +47,7 @@ Vercel deploy needs Vercel project linked; `.vercel/` is gitignored.
 - **Route protection is client-side**: `(app)/layout.tsx` checks `supabase.auth.getSession()` and redirects to `/login?next={path}` when signed out. There is **no middleware**.
 - **Auth callback** (`/auth/callback`) is a client page that exchanges the PKCE code with `exchangeCodeForSession()`; the session lands in the same localStorage origin as the app (also closes OAuth popups).
 - **Login in an iframe**: the magic-link email includes a 6-digit OTP. Inside an iframe (`window.self !== window.top`) the login page shows a code field so the user can finish signing in without leaving the iframe — the link alone can't propagate to the iframe because browsers partition storage by top-level site. Top-level users can still just click the link.
+- **Demo login (optional)**: when `NEXT_PUBLIC_DEMO_MODE=true`, the login/landing pages show a "Try the demo" button. `POST /api/demo/login` finds-or-creates the demo user (`DEMO_EMAIL`, default `demo@jobpilot.local`), mints a magic-link OTP via the admin API (no email sent, so the 2/hour rate limit doesn't apply), exchanges it for a session, and the client persists it with `setSession` (same localStorage as normal sign-in, so it works in iframes). Don't enable on public production unless public demo access is intended.
 
 ### Playwright screenshot auth (the working approach)
 
@@ -98,6 +99,7 @@ src/app/
     account/delete      # Delete account + storage
     usage/              # Quota counters
     webhooks/stripe     # Stripe events
+    demo/login          # Passwordless demo login (opt-in via NEXT_PUBLIC_DEMO_MODE=true; no email sent)
 ```
 
 ## Testing
@@ -167,7 +169,8 @@ Uses `openai` SDK pointed at any OpenAI-compatible API (`OPENAI_COMPATIBLE_BASE_
 - **Rate limit:** `auth.rate_limit.email_sent = 2` per hour (in `supabase/config.toml`). This is why the admin API bypass is needed for automation.
 - **Token expiry:** 3600s (1 hour) — `jwt_expiry` in config, matches `expires_in` from verify response
 - **OTP length:** 6 digits (`otp_length = 6`)
-- **Site URL:** `http://127.0.0.1:3000` in local config — if dev runs on localhost vs 127.0.0.1, redirects may fail
+- **Site URL:** `http://localhost:5200` in local config (`PORT=5200`) — if the app runs on a different port, the hosted project's URL Configuration must allowlist that origin or magic links fall back to `site_url` (and email sign-in links break)
+- **Magic-link email:** a custom template (`supabase/templates/magic-link.html`) includes `{{ .Token }}` so the 6-digit code is available for iframe sign-in — the stock Supabase template only contains the link
 - **RLS:** `jp_companies` and `jp_postings` are `select`-only for authenticated users; writes go through the admin client (service_role key)
 
 ## Config files

@@ -10,6 +10,7 @@ if (!email) {
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const redirectTo = `http://localhost:${process.env.PORT ?? "5200"}/auth/callback`;
 
 if (!supabaseUrl || !serviceRoleKey) {
   console.error("Missing env vars. Source .env.local first.");
@@ -33,7 +34,7 @@ console.log(`Found user: ${user.id} (${user.email})`);
 const { data, error } = await adminClient.auth.admin.generateLink({
   type: "magiclink",
   email: email,
-  options: { redirectTo: `http://localhost:3000/auth/callback` },
+  options: { redirectTo },
 });
 
 if (error) { console.error("Generate link error:", error); process.exit(1); }
