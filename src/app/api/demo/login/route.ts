@@ -36,12 +36,15 @@ export async function POST() {
   // is important: generateLink on a *missing* user silently creates one and
   // returns a signup-type OTP, which fails magic-link verification with 403.
   // The signup trigger creates the profile + usage counter.
+  // Tolerate "already registered": Supabase's message is "A user with this
+  // email address has already been registered" (note the "been"), so match
+  // loosely instead of the exact phrase.
   const { error: createError } = await supabase.auth.admin.createUser({
     email: DEMO_EMAIL,
     email_confirm: true,
     user_metadata: { demo: true },
   });
-  if (createError && !/already registered/i.test(createError.message)) {
+  if (createError && !/already.*registered/i.test(createError.message)) {
     return NextResponse.json(
       { error: createError.message },
       { status: 500 }

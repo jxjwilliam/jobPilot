@@ -23,6 +23,16 @@ JobPilot is an AI career-operations pipeline: upload a resume, get fields auto-f
 - Brand: SVG favicon + logo in nav / login / home
 - **shadcn/ui** component library (Button, Card, Badge, Progress, Skeleton, Dialog, Tabs, DropdownMenu)
 
+### Demo login ("Try the demo")
+
+- Opt-in via `NEXT_PUBLIC_DEMO_MODE=true` (do not enable on public production deployments).
+- `POST /api/demo/login` ensures the demo user exists (tolerating "already been registered" —
+  fixed 2026-08: the tolerance regex previously didn't match Supabase's exact message), then
+  mints a magic-link OTP with the admin API (no email sent) and exchanges it for a session.
+- The client stores the returned session via `supabase.auth.setSession`, i.e. **localStorage
+  PKCE** — the same origin-scoped store magic-link uses, so demo sign-in works inside the
+  dashboard iframe (no cookies involved).
+
 ## Docs map
 
 | Doc | Purpose |
