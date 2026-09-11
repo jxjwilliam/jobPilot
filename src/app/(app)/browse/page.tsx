@@ -66,6 +66,8 @@ export default function BrowsePage() {
   const [location, setLocation] = useState("");
   const [draftLocation, setDraftLocation] = useState("");
   const [remoteOnly, setRemoteOnly] = useState(false);
+  // Default view: Greenhouse only (switch to "All sources" for the rest).
+  const [channel, setChannel] = useState("greenhouse");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
@@ -82,6 +84,7 @@ export default function BrowsePage() {
       if (q.trim()) params.set("q", q.trim());
       if (location.trim()) params.set("location", location.trim());
       if (remoteOnly) params.set("remote", "1");
+      if (channel !== "all") params.set("channel", channel);
       params.set("page", String(page));
       params.set("per_page", "20");
 
@@ -264,6 +267,23 @@ export default function BrowsePage() {
           />
           Remote only
         </label>
+        <select
+          value={channel}
+          onChange={(e) => {
+            setChannel(e.target.value);
+            setPage(1);
+          }}
+          className="h-9 rounded-lg border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          title="Filter by source board"
+        >
+          <option value="all">All sources</option>
+          <option value="greenhouse">Greenhouse</option>
+          <option value="lever">Lever</option>
+          <option value="ashby">Ashby</option>
+          <option value="workable">Workable</option>
+          <option value="recruitee">Recruitee</option>
+          <option value="personio">Personio</option>
+        </select>
       </div>
 
       {error ? (

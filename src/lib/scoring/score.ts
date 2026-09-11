@@ -280,6 +280,10 @@ export async function scoreUnscoredBatch(
       "id, company_name, title, location, employment_type, description_raw, salary_min, salary_max"
     )
     .eq("is_active", true)
+    // Only score postings that passed the keyword filter — otherwise the batch is
+    // spent on sales/recruiting rows and the relevant ones never make it into the
+    // 500-row window at all.
+    .eq("is_relevant", true)
     .order("last_seen_at", { ascending: false })
     .limit(500);
 

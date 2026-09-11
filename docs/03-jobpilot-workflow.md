@@ -77,7 +77,7 @@ flowchart TD
   B --> C[LLM extracts profile + suggested preferences]
   C --> D[User reviews autofilled fields]
   D --> E[Save preferences]
-  E --> F[Pipeline auto-refresh: poll + stale-sweep + score]
+  E --> F[Pipeline auto-refresh: poll + relevance filter + stale-sweep + score]
   F --> G[Matches list: score ≥ threshold]
   G --> H[Tailor → application shell]
   H --> I[Generate tailored resume + cover letter]
@@ -145,7 +145,8 @@ sequenceDiagram
   participant Ing as ingestion/poll
   participant GH as Greenhouse API
   participant LV as Lever API
-  participant DB as companies + postings
+  participant FL as ingestion/filter
+  participant DB as jp_companies + jp_postings
 
   Note over Trig: Triggered by cron (CRON_SECRET), the auto-refresh pipeline, or POST /api/pipeline/run
   Trig->>Ing: pollCompanies(admin)
@@ -157,11 +158,20 @@ sequenceDiagram
     else lever
       Ing->>LV: GET /v0/postings/{slug}
       LV-->>Ing: postings JSON
+    else ashby / workable / recruitee / personio
+      Ing->>Ing: same shape, per-platform connector
     end
-    Ing->>DB: upsert postings (ats_source, external_id)
+    Ing->>FL: evaluatePosting(title, description, location)
+    Note over FL: reject unless the TITLE carries a keyword, the role names an<br/>AI/full-stack specialism AND a seniority signal, and the location is<br/>Canada-eligible or location-agnostic
+    Ing->>DB: upsert only relevant rows (ats_source, external_id, is_relevant, matched_keywords)
   end
   Ing-->>Trig: { polled, upserted, errors }
 ```
+
+**Relevance gate:** only postings that pass `src/lib/ingestion/filter.ts` are written. The verdict is
+stored on the row (`is_relevant`, `matched_keywords`), so counts and source filters are plain SQL and
+the scorer never wastes a batch on sales/recruiting noise. `scripts/backfill_relevance.mjs` tags
+rows that predate the filter (run with `--dry-run` first).
 
 **Stale-job sweep:** the pipeline then runs `deactivateStalePostings()` — any posting whose
 `last_seen_at` is older than **30 days** is set `is_active = false` and drops out of Browse and
@@ -274,9 +284,9 @@ Invalid transitions are rejected by `assertTransition` in `src/lib/applications/
 |---|---|---|
 | `jp_users` | Auth signup trigger | Billing / digest |
 | `jp_profiles` | Resume upload / profile PUT | Scoring, Matches gate; `resume_fingerprint` written by pipeline rescore |
-| `jp_companies` | Seed SQL | Poller |
-| `jp_postings` | Poller (6 ATS sources); stale-sweep sets `is_active=false` | Scoring, Browse page, Matches join |
-| `jp_scores` | Score run / cron / pipeline rescore | Matches list |
+| `jp_companies` | Canada-first seed SQL (`supabase/seed/jp_companies_canada.sql`) | Poller |
+| `jp_postings` | Poller (6 ATS sources) — **only rows passing the relevance filter are inserted**; `is_relevant` / `matched_keywords` come from `src/lib/ingestion/filter.ts` (backfill: `scripts/backfill_relevance.mjs`); stale-sweep sets `is_active=false` | Scoring (relevant only), Browse, Matches join, dashboard counts |
+| `jp_scores` | Score run / cron / pipeline rescore (relevant postings only) | Matches list |
 | `jp_applications` | Tailor flow + Kanban PATCH | Tracker, review UI, follow-up, Matches applied-filter |
 | `jp_interview_sessions` | Interview generate / evaluate | Interview UI, report |
 | `jp_usage_counters` | Tailor increment | Usage page / quota |
@@ -443,9 +453,15 @@ live). Freshness is surfaced by `GET /api/pipeline/status` → `{ last_poll_at, 
 Matches only lists rows in `jp_scores` for **your** profile above `min_score`, and hides jobs you've
 already applied to (unless the "Show applied" toggle is on).
 
+**Most common cause after the filter landed (2026-09-10):** `jp_scores` can be full of rows that
+point at postings which no longer pass the relevance gate — those are hidden, so the page reads
+empty even though the dashboard shows matches. Fix: re-score (`POST /api/cron/score`, or **Score
+more matches**), which now only selects `is_relevant` postings. Also check the Source dropdown —
+Matches defaults to **Greenhouse only**.
+
 Typical first-run state:
 
-1. Pipeline auto-refresh fills `jp_postings` (thousands of jobs) ✓  
+1. Pipeline auto-refresh fills `jp_postings` with relevant rows only (~50–100) ✓  
 2. Profile has `resume_parsed` ✓  
 3. `jp_scores` is still empty ✗ → **Auto-score triggers automatically!**
 4. Progress bar shows "Scoring 1/20 · Stripe SWE…"
@@ -458,8 +474,9 @@ Job freshness: postings unseen for 30 days are deactivated and leave the list, s
 reflect the live market rather than a stale snapshot. Scores refresh automatically when you update
 your resume (fingerprint-based re-score), or on demand via **Re-score matches**.
 
-You can also browse all postings at `/browse` before scoring — search, filter, "Refresh now", and
-trigger scoring on individual jobs.
+You can also browse all relevant postings at `/browse` before scoring — search, filter by
+location/remote and by **source board** (defaults to Greenhouse), "Refresh now", and trigger
+scoring on individual jobs. Browse only ever lists `is_relevant = true` rows.
 
 ---
 

@@ -4,6 +4,11 @@
 **Status:** Implemented (MVP) — runtime detail in `docs/03-jobpilot-workflow.md`  
 **Companions:** `docs/01-jobpilot-product-spec.md`, `docs/02-jobpilot-mvp-plan.md`, `docs/cascading-github-pipeline-playbook.md`
 
+> **Historical snapshot (2026-07-11).** Kept for design rationale. Two things changed since:
+> ingestion now covers all six ATS platforms and is gated by a strict relevance filter
+> (`is_relevant` / `matched_keywords`), and the UI defaults to Greenhouse with a Source filter.
+> Current behaviour: `docs/README.md`.
+
 ---
 
 ## 1. Decisions locked in brainstorming

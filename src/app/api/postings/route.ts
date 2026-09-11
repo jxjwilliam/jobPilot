@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/supabase/server";
 import { DEFAULT_MIN_SCORE, filterByMinScore } from "@/lib/scoring/score";
 import { markAndFilterApplied } from "@/lib/matches/applied";
+import { isRelevant } from "@/lib/ingestion/filter";
 
 async function requireUser(request: NextRequest) {
   return getSessionUser(request);
@@ -39,6 +40,9 @@ export async function GET(request: NextRequest) {
       : null;
   const sort = searchParams.get("sort") === "date" ? "date" : "score";
   const includeApplied = searchParams.get("include_applied") === "1";
+  // Source board filter (greenhouse / lever / ashby / ...). Defaults to greenhouse
+  // in the UI; "all" (or empty) shows every source.
+  const channel = (searchParams.get("channel") ?? "").trim().toLowerCase();
 
   const { data: profile, error: profileError } = await supabase
     .from("jp_profiles")
@@ -65,6 +69,7 @@ export async function GET(request: NextRequest) {
       posting_id,
       jp_postings (
         id,
+        ats_source,
         company_name,
         title,
         location,
@@ -74,7 +79,8 @@ export async function GET(request: NextRequest) {
         posted_at,
         first_seen_at,
         last_seen_at,
-        is_active
+        is_active,
+        is_relevant
       )
     `
     )
@@ -96,6 +102,7 @@ export async function GET(request: NextRequest) {
     jp_postings:
       | {
           id: string;
+          ats_source: string | null;
           company_name: string;
           title: string;
           location: string | null;
@@ -106,9 +113,11 @@ export async function GET(request: NextRequest) {
           first_seen_at: string | null;
           last_seen_at: string | null;
           is_active: boolean;
+          is_relevant: boolean;
         }
       | {
           id: string;
+          ats_source: string | null;
           company_name: string;
           title: string;
           location: string | null;
@@ -119,6 +128,7 @@ export async function GET(request: NextRequest) {
           first_seen_at: string | null;
           last_seen_at: string | null;
           is_active: boolean;
+          is_relevant: boolean;
         }[]
       | null;
   };
@@ -129,8 +139,16 @@ export async function GET(request: NextRequest) {
         ? row.jp_postings[0]
         : row.jp_postings;
       if (!posting || !posting.is_active) return null;
+      // Display gate: the stored flag is the source of truth (set at ingest and by
+      // scripts/backfill_relevance.mjs). Scores can still exist for postings that
+      // stopped qualifying, so this is what keeps them off the matches page.
+      if (!posting.is_relevant) return null;
+      if (channel && channel !== "all" && (posting.ats_source ?? "") !== channel) {
+        return null;
+      }
       return {
         id: posting.id,
+        ats_source: posting.ats_source,
         posting_id: row.posting_id,
         company_name: posting.company_name,
         title: posting.title,

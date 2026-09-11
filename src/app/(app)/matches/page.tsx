@@ -74,6 +74,8 @@ export default function MatchesPage() {
   const [location, setLocation] = useState("");
   const [draftLocation, setDraftLocation] = useState("");
   const [remoteOnly, setRemoteOnly] = useState(false);
+  // Default view: Greenhouse only (switch to "All sources" for the rest).
+  const [channel, setChannel] = useState("greenhouse");
   const [includeApplied, setIncludeApplied] = useState(false);
   const [maxAgeDays, setMaxAgeDays] = useState<number | "">("");
   const [sort, setSort] = useState<"score" | "date">("score");
@@ -97,6 +99,7 @@ export default function MatchesPage() {
   const queryString = useMemo(() => {
     const params = new URLSearchParams();
     params.set("min_score", String(minScore));
+    params.set("channel", channel);
     if (query.trim()) params.set("q", query.trim());
     if (location.trim()) params.set("location", location.trim());
     if (remoteOnly) params.set("remote", "1");
@@ -104,7 +107,7 @@ export default function MatchesPage() {
     if (maxAgeDays !== "") params.set("max_age_days", String(maxAgeDays));
     params.set("sort", sort);
     return params.toString();
-  }, [minScore, query, location, remoteOnly, includeApplied, maxAgeDays, sort]);
+  }, [minScore, query, location, remoteOnly, includeApplied, maxAgeDays, sort, channel]);
 
   const loadMatches = useCallback(async () => {
     setLoading(true);
@@ -409,6 +412,23 @@ export default function MatchesPage() {
             className="rounded border-neutral-300"
           />
           Show applied
+        </label>
+
+        <label className="flex flex-col gap-1 text-xs text-neutral-500">
+          Source
+          <select
+            value={channel}
+            onChange={(e) => setChannel(e.target.value)}
+            className="h-9 rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-800 shadow-sm"
+          >
+            <option value="greenhouse">Greenhouse</option>
+            <option value="lever">Lever</option>
+            <option value="ashby">Ashby</option>
+            <option value="workable">Workable</option>
+            <option value="recruitee">Recruitee</option>
+            <option value="personio">Personio</option>
+            <option value="all">All sources</option>
+          </select>
         </label>
       </div>
 

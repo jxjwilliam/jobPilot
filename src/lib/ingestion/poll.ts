@@ -14,6 +14,7 @@ import {
   type NormalizedPosting,
   type PollResult,
 } from "./types";
+import { evaluatePosting } from "./filter";
 
 async function fetchForCompany(
   company: CompanyRow
@@ -78,21 +79,38 @@ async function upsertPostings(
 ): Promise<number> {
   if (postings.length === 0) return 0;
 
-  const rows = postings.map((p) => ({
-    ats_source: atsSource,
-    external_id: p.external_id,
-    company_name: p.company_name,
-    title: p.title,
-    location: p.location,
-    employment_type: p.employment_type ?? null,
-    description_raw: p.description_raw,
-    salary_min: p.salary_min ?? null,
-    salary_max: p.salary_max ?? null,
-    apply_url: p.apply_url,
-    posted_at: p.posted_at,
-    last_seen_at: nowIso,
-    is_active: true,
-  }));
+  // Keyword gate: only relevant postings are stored, so the matches view and the
+  // dashboard totals never have to page through sales/recruiting noise.
+  // Rows are tagged with is_relevant + matched_keywords so counts can be done in SQL.
+  const rows = postings
+    .map((p) => ({
+      posting: p,
+      verdict: evaluatePosting({
+        title: p.title,
+        description: p.description_raw,
+        location: p.location,
+      }),
+    }))
+    .filter((entry) => entry.verdict.ok)
+    .map(({ posting: p, verdict }) => ({
+      ats_source: atsSource,
+      external_id: p.external_id,
+      company_name: p.company_name,
+      title: p.title,
+      location: p.location,
+      employment_type: p.employment_type ?? null,
+      description_raw: p.description_raw,
+      salary_min: p.salary_min ?? null,
+      salary_max: p.salary_max ?? null,
+      apply_url: p.apply_url,
+      posted_at: p.posted_at,
+      last_seen_at: nowIso,
+      is_active: true,
+      is_relevant: true,
+      matched_keywords: verdict.ok ? verdict.matched : [],
+    }));
+
+  if (rows.length === 0) return 0;
 
   // Upsert in chunks to avoid oversized payloads
   const chunkSize = 100;

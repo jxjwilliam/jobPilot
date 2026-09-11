@@ -7,9 +7,12 @@ JobPilot is an AI career-operations pipeline: upload a resume, get fields auto-f
 - Magic-link auth (Supabase)
 - Resume upload → **AI autofill** (summary, skills, experience, education, suggested preferences) + re-extract
 - ATS ingestion: Greenhouse, Lever, Ashby, Workable, Recruitee, Personio (`/api/cron/poll-ats`)
+- **Strict keyword filter** — a posting is only stored if its *title* names an AI/full-stack specialism and a seniority signal, and its location is Canada-eligible or location-agnostic (`src/lib/ingestion/filter.ts`). Target: 50–100 live postings, not thousands.
+- **Canada-first company list** — 67 watched boards, every slug verified live against its public ATS API; boards with zero Canada/remote roles are deactivated (`supabase/seed/jp_companies_canada.sql`)
+- **`is_relevant` / `matched_keywords`** on every posting, so the dashboard counts and source filters are plain SQL (`scripts/backfill_relevance.mjs` backfills existing rows)
 - **Streaming scoring** with real-time progress bar (`/api/score/run` — SSE)
 - **Auto-scoring** — triggers automatically when you enter Matches with unscored jobs
-- **Browse page** — search all active job postings, filter by keyword/location/remote (`/browse`)
+- **Browse page** — search relevant postings, filter by keyword/location/remote **and by source board** (Greenhouse / Lever / Ashby / …, defaults to Greenhouse) (`/browse`)
 - **Mock interview** — AI generates role-specific questions, evaluates answers with STAR scoring, produces report (`/interview/[id]`)
 - **Stale application detection** — flags applications idle for 21+ days, drafts AI follow-up emails
 - **Self-refreshing pipeline** — jobs refresh automatically (lazy TTL on page visits) + a manual "Refresh now" button on Browse; no external cron required
@@ -18,7 +21,8 @@ JobPilot is an AI career-operations pipeline: upload a resume, get fields auto-f
 - **Resume-change re-scoring** — matches re-score automatically when you update your resume, plus a manual "Re-score matches" button
 - **Streamed tailoring** — resume + cover letter generated as two LLM steps with live SSE progress; regenerate is free
 - Tailoring + regenerate + review UI; Kanban tracker with stale badges
-- Pipeline stats bar (total jobs, scored count, applications, last poll time)
+- Pipeline stats bar — "Jobs matching your keywords" (relevant + active only, not raw scraped volume), scored count, applications, last poll time, plus a **By source** breakdown
+- **Kanban + Matches default to Greenhouse**; switch the Source dropdown to `All sources` for the rest
 - Quota / mock Stripe portal; weekly digest (mock email)
 - Brand: SVG favicon + logo in nav / login / home
 - **shadcn/ui** component library (Button, Card, Badge, Progress, Skeleton, Dialog, Tabs, DropdownMenu)

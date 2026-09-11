@@ -13,6 +13,7 @@ export async function GET(request: Request) {
   const q = (searchParams.get("q") ?? "").trim().toLowerCase();
   const location = (searchParams.get("location") ?? "").trim().toLowerCase();
   const remoteOnly = searchParams.get("remote") === "1";
+  const channel = (searchParams.get("channel") ?? "").trim().toLowerCase();
   const maxAgeDaysRaw = searchParams.get("max_age_days");
   const maxAgeDays =
     maxAgeDaysRaw != null && maxAgeDaysRaw !== ""
@@ -30,7 +31,14 @@ export async function GET(request: Request) {
       { count: "exact" }
     )
     .eq("is_active", true)
+    // Only keyword-relevant postings — this is what makes the "Jobs available"
+    // number meaningful instead of 11,000+ scraped rows.
+    .eq("is_relevant", true)
     .order("last_seen_at", { ascending: false });
+
+  if (channel && channel !== "all") {
+    query = query.eq("ats_source", channel);
+  }
 
   if (q) {
     query = query.or(

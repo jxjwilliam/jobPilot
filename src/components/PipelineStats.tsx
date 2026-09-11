@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 type PipelineStatsData = {
   total_postings: number;
+  by_channel?: Record<string, number>;
   scored_count: number;
   application_count: number;
   has_resume: boolean;
@@ -67,7 +68,7 @@ export function PipelineStats() {
 
   const statItems = [
     {
-      label: "Jobs available",
+      label: "Jobs matching your keywords",
       value: stats.total_postings.toLocaleString(),
     },
     {
@@ -84,30 +85,41 @@ export function PipelineStats() {
     },
   ];
 
+  const channels = Object.entries(stats.by_channel ?? {}).sort((a, b) => b[1] - a[1]);
+
   return (
-    <div
-      className="flex flex-wrap gap-x-6 gap-y-1 rounded-lg border bg-card px-4 py-3 text-sm"
-      role="status"
-      aria-label="Pipeline statistics"
-    >
-      {statItems.map((item) => (
-        <div key={item.label} className="flex items-baseline gap-1.5">
-          <span className="text-muted-foreground">{item.label}</span>
-          <span
-            className={cn(
-              "font-semibold tabular-nums",
-              item.label === "Scored for you" &&
-                stats.scored_count === 0 &&
-                "text-amber-600"
-            )}
-          >
-            {item.value}
-          </span>
-        </div>
-      ))}
-      {!stats.has_resume ? (
-        <div className="flex items-center gap-1.5 text-amber-600">
-          <span className="font-medium">⚠ Resume needed</span>
+    <div className="rounded-lg border bg-card px-4 py-3 text-sm" role="status" aria-label="Pipeline statistics">
+      <div className="flex flex-wrap gap-x-6 gap-y-1">
+        {statItems.map((item) => (
+          <div key={item.label} className="flex items-baseline gap-1.5">
+            <span className="text-muted-foreground">{item.label}</span>
+            <span
+              className={cn(
+                "font-semibold tabular-nums",
+                item.label === "Scored for you" &&
+                  stats.scored_count === 0 &&
+                  "text-amber-600"
+              )}
+            >
+              {item.value}
+            </span>
+          </div>
+        ))}
+        {!stats.has_resume ? (
+          <div className="flex items-center gap-1.5 text-amber-600">
+            <span className="font-medium">⚠ Resume needed</span>
+          </div>
+        ) : null}
+      </div>
+
+      {channels.length > 0 ? (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+          <span>By source:</span>
+          {channels.map(([name, count]) => (
+            <span key={name} className="rounded-full border px-2 py-0.5 capitalize">
+              {name} <span className="font-semibold tabular-nums">{count}</span>
+            </span>
+          ))}
         </div>
       ) : null}
     </div>

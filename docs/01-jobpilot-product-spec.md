@@ -2,6 +2,15 @@
 
 **Version:** 0.1 (MVP)
 **Status:** Implemented (MVP Must scope) — see `docs/03-jobpilot-workflow.md` for runtime behavior
+
+> **Post-MVP changes (2026-09-10):** sources are now all six ATS platforms (Greenhouse, Lever,
+> Ashby, Workable, Recruitee, Personio) against a **67-board Canada-first list**, and ingestion is
+> gated by a **strict relevance filter** (title keyword + seniority + AI/full-stack specialism +
+> Canada/remote-eligible location) stored as `jp_postings.is_relevant` / `matched_keywords`.
+> Matches and Browse default to **Greenhouse** with a Source dropdown. The original volume
+> assumptions below (500–2,000 companies, unfiltered ingest) are superseded — see
+> `docs/README.md` and the repo root `README.md`.
+
 **Owner:** [you]
 **Last updated:** July 11, 2026
 
@@ -228,8 +237,9 @@ jp_usage_counters
 ## 7. Pipeline stage specs
 
 ### 7.1 Discovery / Ingestion
-- **Sources (MVP, Tier 1 only):** Greenhouse (`boards-api.greenhouse.io/v1/boards/{company}/jobs`), Lever (`api.lever.co/v0/postings/{company}`), Ashby, Workable, Recruitee, Personio public feeds
-- **Company list seeding:** Start with a curated list of 500–2,000 companies known to use these ATS platforms (tech-heavy; can bootstrap from open datasets such as the MIT-licensed `job-board-aggregator` company list, filtered/verified before use). Expand list based on user preference signals (if users repeatedly search for a company not yet tracked, auto-queue it).
+- **Sources (Tier 1 only):** Greenhouse (`boards-api.greenhouse.io/v1/boards/{company}/jobs`), Lever (`api.lever.co/v0/postings/{company}`), Ashby (`api.ashbyhq.com/posting-api/job-board/{company}`), Workable, Recruitee, Personio public feeds
+- **Company list seeding (implemented 2026-09-10):** a curated **Canada-first** list, every slug verified live against its public ATS API before being seeded — a board must exist *and* post Canada-based or Canada-eligible remote roles, otherwise it is deactivated (`supabase/seed/jp_companies_canada.sql`). Currently 67 active boards (45 Greenhouse, 13 Ashby, 9 Lever). Boards that return 404/410 are disabled; transient timeouts only count toward a 5-failure limit so one bad fetch can't kill a board.
+- **Relevance filtering (implemented 2026-09-10):** ingestion is gated by `src/lib/ingestion/filter.ts` — the posting title must contain a role/AI keyword, name an AI or full-stack specialism, and carry a seniority signal, and the location must be Canada-eligible or location-agnostic. Surviving rows are tagged `is_relevant = true` with `matched_keywords`, which is what the dashboard counts, the source filters read, and the scorer consumes. The point is deliberately a 50–100-row working set rather than a 10,000-row scrape.
 - **Poll frequency:** every 4–6 hours per board; stagger requests to stay well under any implicit rate limits (these are public unauthenticated endpoints, not partner APIs — be a good citizen: reasonable concurrency, backoff on errors, identify your bot via User-Agent)
 - **Dedup key:** `(ats_source, external_id)`; also fuzzy-dedupe near-identical postings that appear on multiple boards for the same company
 - **Freshness:** mark `is_active = false` if a posting isn't seen in 2 consecutive polls; hard-delete or archive after 30 days

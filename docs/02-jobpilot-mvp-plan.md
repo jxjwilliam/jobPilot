@@ -3,6 +3,11 @@
 **Version:** 0.1
 **Companion to:** `01-jobpilot-product-spec.md`
 **Status:** MVP Must list shipped in-repo (auth, ingest, score, tailor, tracker, mock billing/email). Fast-follow items in §1.2 remain open.
+
+> **Post-MVP (2026-09-10):** the fast-follow ATS sources were in fact added — all six platforms are
+> live now, against a verified Canada-first board list, with a strict keyword/relevance filter at
+> ingest (see `docs/README.md`). Where this plan says "Greenhouse + Lever only" or "200–500
+> companies", read those as the original MVP scope, not current behaviour.
 **Last updated:** July 11, 2026
 
 ---

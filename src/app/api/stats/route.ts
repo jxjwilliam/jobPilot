@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
   // Fetch counts in parallel
   const [
     { count: totalPostings },
+    { data: relevantRows },
     { count: scoredCount },
     { data: lastPoll },
     { data: lastScore },
@@ -34,7 +35,14 @@ export async function GET(request: NextRequest) {
     supabase
       .from("jp_postings")
       .select("*", { count: "exact", head: true })
-      .eq("is_active", true),
+      .eq("is_active", true)
+      .eq("is_relevant", true),
+    supabase
+      .from("jp_postings")
+      .select("ats_source")
+      .eq("is_active", true)
+      .eq("is_relevant", true)
+      .limit(5000),
     supabase
       .from("jp_scores")
       .select("*", { count: "exact", head: true })
@@ -65,6 +73,13 @@ export async function GET(request: NextRequest) {
 
   const hasResume = Boolean(profileData?.resume_parsed);
 
+  // Group the relevant postings by source board (greenhouse / lever / ashby / ...).
+  const byChannel = (relevantRows ?? []).reduce<Record<string, number>>((acc, row) => {
+    const key = (row as { ats_source?: string }).ats_source ?? "unknown";
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {});
+
   // Lazy background refresh: if the pipeline is stale, kick it off after the response.
   const admin = createAdminClient();
   const pipelineState = await getPipelineState(admin).catch(() => null);
@@ -76,6 +91,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     total_postings: totalPostings ?? 0,
+    by_channel: byChannel,
     scored_count: scoredCount ?? 0,
     application_count: applicationCount ?? 0,
     has_resume: hasResume,

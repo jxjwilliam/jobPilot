@@ -4,6 +4,10 @@
 
 **Goal:** Ship JobPilot Must-scope MVP — magic-link auth, resume/profile, Greenhouse+Lever ingestion, scoring, tailoring with human review, Kanban tracker, quota/billing (mock Stripe), and weekly digest (mock email).
 
+> **Historical snapshot (2026-07-11).** Completed plan, kept for task history. "Greenhouse+Lever
+> ingestion" was the MVP scope; today all six ATS platforms are ingested behind a strict
+> relevance filter. Current behaviour: `docs/README.md`.
+
 **Architecture:** Modular monolith — Next.js App Router + linked Supabase. Pipeline stages as `src/lib/*` modules with adapter interfaces for LLM, Stripe, and Resend.
 
 **Tech Stack:** Next.js 15 (App Router), TypeScript, Tailwind CSS, Supabase (Auth/DB/Storage), OpenAI-compatible SDK (`openai` npm), Vitest, Zod.
