@@ -39,15 +39,15 @@ Vercel deploy needs Vercel project linked; `.vercel/` is gitignored.
 
 ## Auth
 
-**Magic-link only.** No password login. The login page calls `supabase.auth.signInWithOtp()` — rate-limited to 2 emails/hour per address by Supabase free tier.
+**Fixed-credential password login (single-tenant).** The login page (`src/app/(auth)/login/page.tsx`) posts email + password to `POST /api/auth/password-login`, which compares them (constant-time) against `APP_LOGIN_EMAIL` / `APP_LOGIN_PASSWORD` (code defaults: `jxjwilliam@gmail.com` / `William1!`). On a match the server mints a real Supabase session for that email via `mintSessionForEmail()` (`src/lib/auth/mint-session.ts`: admin `createUser` if missing → `generateLink` magiclink OTP → `POST /auth/v1/verify`) and the client stores it with `setSession`. Failed attempts are throttled (10 per IP per 5 min, per serverless instance). Self-serve signup is no longer offered, and `jp_restrict_signups` (`supabase/migrations/20260910000002_restrict_signups.sql`) rejects any new `auth.users` row outside the allowlist, because the anon key is public.
 
 **Iframe-safe sessions (localStorage, not cookies).** The browser client (`src/lib/supabase/client.ts`) is a plain `@supabase/supabase-js` client with `flowType: "pkce"` and `persistSession: true`, so sessions + PKCE verifiers live in **localStorage** — origin-scoped and not blocked in cross-origin iframes the way third-party cookies are. The server never sees a session cookie, so:
 
 - **API routes** authenticate via `getSessionUser(request)` (`src/lib/supabase/server.ts`), which reads the `Authorization: Bearer <access_token>` header attached by `apiFetch()` (`src/lib/api.ts`). All user API calls go through `apiFetch()`.
 - **Route protection is client-side**: `(app)/layout.tsx` checks `supabase.auth.getSession()` and redirects to `/login?next={path}` when signed out. There is **no middleware**.
-- **Auth callback** (`/auth/callback`) is a client page that exchanges the PKCE code with `exchangeCodeForSession()`; the session lands in the same localStorage origin as the app (also closes OAuth popups).
-- **Login in an iframe**: the magic-link email includes a 6-digit OTP. Inside an iframe (`window.self !== window.top`) the login page shows a code field so the user can finish signing in without leaving the iframe — the link alone can't propagate to the iframe because browsers partition storage by top-level site. Top-level users can still just click the link.
-- **Demo login (optional)**: when `NEXT_PUBLIC_DEMO_MODE=true`, the login/landing pages show a "Try the demo" button. `POST /api/demo/login` finds-or-creates the demo user (`DEMO_EMAIL`, default `demo@jobpilot.local`), mints a magic-link OTP via the admin API (no email sent, so the 2/hour rate limit doesn't apply), exchanges it for a session, and the client persists it with `setSession` (same localStorage as normal sign-in, so it works in iframes). Don't enable on public production unless public demo access is intended.
+- **Auth callback** (`/auth/callback`) is a client page that exchanges the PKCE code with `exchangeCodeForSession()`; the session lands in the same localStorage origin as the app (also closes OAuth popups). It is no longer part of the login flow (kept for OAuth/magic-link links already in the wild).
+- **Login in an iframe**: because the password form stores its session with `setSession` in localStorage, it works inside cross-origin iframes with no cookie/redirect dance.
+- **Demo login (optional)**: when `NEXT_PUBLIC_DEMO_MODE=true` (currently `false`), the login/landing pages show a "Try the demo" button. `POST /api/demo/login` mints a session for `DEMO_EMAIL` (default `demo@jobpilot.local`) through the same `mintSessionForEmail()` helper. Leave it off when the app should be private.
 
 ### Playwright screenshot auth (the working approach)
 

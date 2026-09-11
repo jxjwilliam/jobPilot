@@ -56,8 +56,7 @@ export default function Home() {
     <main className="flex min-h-screen flex-col items-center justify-center p-8">
       <JobPilotLogo className="scale-125" />
       <p className="mt-6 max-w-md text-center text-lg text-neutral-600">
-        AI-powered job application assistant. Sign in with a magic link to get
-        started.
+        AI-powered job application assistant. Sign in to get started.
       </p>
       <Link
         href="/login"

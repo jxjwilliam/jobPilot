@@ -4,7 +4,7 @@ JobPilot is an AI career-operations pipeline: upload a resume, get fields auto-f
 
 ## What's implemented
 
-- Magic-link auth (Supabase)
+- Fixed-credential password login (single-tenant) over Supabase sessions
 - Resume upload → **AI autofill** (summary, skills, experience, education, suggested preferences) + re-extract
 - ATS ingestion: Greenhouse, Lever, Ashby, Workable, Recruitee, Personio (`/api/cron/poll-ats`)
 - **Strict keyword filter** — a posting is only stored if its *title* names an AI/full-stack specialism and a seniority signal, and its location is Canada-eligible or location-agnostic (`src/lib/ingestion/filter.ts`). Target: 50–100 live postings, not thousands.
@@ -36,6 +36,16 @@ JobPilot is an AI career-operations pipeline: upload a resume, get fields auto-f
 - The client stores the returned session via `supabase.auth.setSession`, i.e. **localStorage
   PKCE** — the same origin-scoped store magic-link uses, so demo sign-in works inside the
   dashboard iframe (no cookies involved).
+
+### Login (single-tenant)
+
+`/login` is a plain email + password form. The server checks the pair against
+`APP_LOGIN_EMAIL` / `APP_LOGIN_PASSWORD` and then mints a Supabase session for
+that one account, so there is no self-serve signup and no email rate limit.
+Set both variables in `.env.local` (and in your host's env) to keep the password
+out of the repo; the code falls back to the original hardcoded pair when unset.
+New accounts outside the allowlist are also rejected at the database level by
+`jp_restrict_signups` (`npx supabase db push`).
 
 ## Docs map
 
@@ -95,7 +105,8 @@ npx supabase db query --linked --file supabase/seed_companies.sql
 npm run dev
 ```
 
-Open [http://localhost:5200](http://localhost:5200). Sign in with a magic link.
+Open [http://localhost:5200](http://localhost:5200) and sign in with the
+`APP_LOGIN_EMAIL` / `APP_LOGIN_PASSWORD` pair from `.env.local`.
 
 ## First-run pipeline
 
