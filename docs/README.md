@@ -60,9 +60,9 @@ From [cascading-github-pipeline-playbook.md](./cascading-github-pipeline-playboo
 | Service | Use |
 |---|---|
 | **Next.js** (React, App Router) | Web UI + API routes |
-| **Supabase** | Auth (magic link), Postgres, Storage (resumes), RLS |
+| **Supabase** | Auth (fixed-credential password login → minted session), Postgres, Storage (resumes), RLS |
 | **OpenAI-compatible LLM** (`openai` SDK + env base URL) | Parse resume, score, tailor (e.g. DeepSeek) |
-| **Greenhouse / Lever** public APIs | Job discovery |
+| **Greenhouse / Lever / Ashby / Workable / Recruitee / Personio** public APIs | Job discovery (all six ATS sources) |
 | **Stripe** | Subscriptions (adapter; `BILLING_MODE=mock` by default) |
 | **Resend** (or similar) | Digest email (`EMAIL_MODE=mock` by default) |
 | **Vercel** (typical host) | Deploy Next.js |

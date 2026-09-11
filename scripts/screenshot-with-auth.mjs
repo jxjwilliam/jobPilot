@@ -1,15 +1,16 @@
 #!/usr/bin/env node
-// ─── screenshot-with-auth.mjs (v3 — localStorage-injection) ─────────────
-// Pipeline: Admin API → REST session → localStorage injection → screenshots
+// ─── screenshot-with-auth.mjs (v4 — sessionStorage-injection) ───────────
+// Pipeline: Admin API → REST session → sessionStorage injection → screenshots
 //
 // Usage:
 //   node --env-file=.env.local scripts/screenshot-with-auth.mjs
 //
-// Sessions now live in localStorage (iframe-safe; cookies are blocked in
-// cross-origin iframes and the server can no longer read them), so we:
+// Sessions now live in sessionStorage (per-tab: it is dropped when the tab
+// closes, so opening the app again forces the fixed-credential login; cookies
+// are blocked in cross-origin iframes and the server can't read them), so we:
 //   1. Get email OTP via Supabase admin API (no email sent)
 //   2. Exchange OTP for session via Supabase REST /auth/v1/verify
-//   3. Inject the session JSON into localStorage under
+//   3. Inject the session JSON into sessionStorage under
 //      `sb-{project_ref}-auth-token` (the @supabase/supabase-js key)
 //   4. The browser client picks it up exactly like a real sign-in
 //
@@ -36,7 +37,7 @@ const PROJECT_REF = SUPABASE_URL
   ? new URL(SUPABASE_URL).hostname.split(".")[0]
   : null;
 
-// @supabase/supabase-js persists the session in localStorage under this key.
+// @supabase/supabase-js persists the session in sessionStorage under this key.
 const AUTH_STORAGE_KEY = `sb-${PROJECT_REF}-auth-token`;
 
 // All routes to screenshot (in navigation order)
@@ -124,10 +125,10 @@ async function getSessionFromAPI() {
   return session;
 }
 
-// ── Step 2: Inject session into localStorage and verify login ───────────
+// ── Step 2: Inject session into sessionStorage and verify login ─────────
 async function loginWithSession(session) {
   console.log("\n" + "=".repeat(50));
-  console.log("  STEP 2: Inject session into localStorage and verify login");
+  console.log("  STEP 2: Inject session into sessionStorage and verify login");
   console.log("=".repeat(50));
 
   const sessionJson = JSON.stringify(session);
@@ -138,22 +139,24 @@ async function loginWithSession(session) {
   const page = await context.newPage();
 
   try {
-    // First visit the domain to establish the origin for localStorage
+    // First visit the domain to establish the origin for sessionStorage
     console.log("  Visiting localhost to set domain...");
     await page.goto(APP_URL, { waitUntil: "domcontentloaded", timeout: 10000 });
 
-    // Seed the localStorage session exactly as a real sign-in would store it.
+    // Seed the sessionStorage session exactly as a real sign-in would store it.
+    // Same tab ⇒ survives the navigation to /matches below, and the app's
+    // guard sees it just like a session created by the login form.
     await page.evaluate(
-      ([key, value]) => localStorage.setItem(key, value),
+      ([key, value]) => sessionStorage.setItem(key, value),
       [AUTH_STORAGE_KEY, sessionJson]
     );
 
     // Verify the session was stored
-    const stored = await page.evaluate((key) => localStorage.getItem(key), AUTH_STORAGE_KEY);
+    const stored = await page.evaluate((key) => sessionStorage.getItem(key), AUTH_STORAGE_KEY);
     if (!stored) {
-      throw new Error("Failed to set auth session in localStorage");
+      throw new Error("Failed to set auth session in sessionStorage");
     }
-    console.log("  ✅ Session stored in localStorage");
+    console.log("  ✅ Session stored in sessionStorage");
 
     // Navigate to protected page to verify login
     console.log("  Verifying: navigating to /matches...");
@@ -166,7 +169,7 @@ async function loginWithSession(session) {
 
     if (currentUrl.includes("/login")) {
       console.error(`\n  ❌ LOGIN FAILED — redirected to /login.`);
-      console.error("     The localStorage session was not accepted by the app.");
+      console.error("     The sessionStorage session was not accepted by the app.");
       console.error("     Stopping. No screenshots taken.\n");
       await browser.close();
       return { success: false, browser: null, page: null };
@@ -271,7 +274,7 @@ function injectReadme(readmePath, markdownBlock) {
 
 // ── Main ──────────────────────────────────────────────────────────────
 async function main() {
-  console.log("\n🚀  JobPilot Screenshot Pipeline (localStorage-injection)\n");
+  console.log("\n🚀  JobPilot Screenshot Pipeline (sessionStorage-injection)\n");
 
   // Phase 1: Get session via REST API
   const session = await getSessionFromAPI();

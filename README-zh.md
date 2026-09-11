@@ -4,12 +4,15 @@ JobPilot 是一个 AI 职业工作流平台：上传简历，LLM 自动填充字
 
 ## 已实现的功能
 
-- 魔法链接登录（Supabase）
+- 固定凭据密码登录（单租户，Supabase 会话）
 - 上传简历 → **AI 自动填充**（简介、技能、经验、教育背景、推荐偏好）+ 重新解析
 - ATS 数据获取：Greenhouse、Lever、Ashby、Workable、Recruitee、Personio（`/api/cron/poll-ats`）
+- **严格关键词过滤** — 只有 *标题* 命中 AI/全栈方向且带资历信号、并且地点在加拿大或明确不限地点的职位才会入库（`src/lib/ingestion/filter.ts`）。目标规模是 50–100 个在招职位，而不是几千个
+- **加拿大优先公司清单** — 67 个监控 board，每个 slug 都已对公开 ATS API 实测；没有加拿大/远程职位的 board 会被停用（`supabase/seed/jp_companies_canada.sql`）
+- 每条职位都带 **`is_relevant` / `matched_keywords`**，因此仪表盘统计和来源筛选都是普通 SQL（`scripts/backfill_relevance.mjs` 可回填历史数据）
 - **流式评分** — 实时进度条显示评分进度（SSE）
 - **自动评分** — 进入 Matches 页面时自动触发评分
-- **职位浏览** — 搜索所有已拉取的职位，支持关键词/地点/远程筛选（`/browse`）
+- **Browse 页面** — 搜索相关职位，可按关键词/地点/远程 **以及来源 board** 筛选（Greenhouse / Lever / Ashby / …，默认 Greenhouse）（`/browse`）
 - **模拟面试** — AI 根据职位生成面试题目，评估回答（STAR 评分），生成面试报告（`/interview/[id]`）
 - **申请跟进提醒** — 检测超过 21 天未更新的申请，AI 草拟跟进邮件
 - **自刷新流水线** — 访问页面时自动刷新职位（惰性 TTL，>6 小时）+ Browse 页「立即刷新」按钮；无需外部 Cron
@@ -18,10 +21,29 @@ JobPilot 是一个 AI 职业工作流平台：上传简历，LLM 自动填充字
 - **简历变更重新评分** — 更新简历后自动重新评分匹配，另有手动「重新评分」按钮
 - **流式定制** — 简历 + 求职信分两步 LLM 生成，SSE 实时进度；重新生成免费
 - 定制材料 + 重新生成 + 审核 UI；Kanban 进度跟踪（含陈旧标记）
-- 流水线统计栏（职位总数、已评分数、申请数、上次拉取时间）
+- 流水线统计栏 — 「匹配你关键词的职位」（仅相关且活跃）、已评分数、申请数、上次拉取时间，以及 **按来源** 细分
+- **Kanban 与 Matches 默认只看 Greenhouse**；在来源下拉框选择 `All sources` 查看其余来源
 - 配额 / Mock Stripe 门户；每周摘要（Mock Email）
 - 品牌：SVG favicon + Logo（导航 / 登录 / 首页）
 - **shadcn/ui** 组件库（Button、Card、Badge、Progress、Skeleton、Dialog、Tabs、DropdownMenu）
+
+### 演示登录（「Try the demo」）
+
+- 通过 `NEXT_PUBLIC_DEMO_MODE=true` 开启（不要在公开生产环境启用）。
+- `POST /api/demo/login` 会确保演示用户存在（容忍 "already been registered"），然后用 Admin API 生成魔法链接 OTP（不发邮件）并换取会话。
+- 客户端用 `supabase.auth.setSession` 保存会话，即 **sessionStorage PKCE**；与密码登录使用同一个 origin 级存储，因此演示登录在跨域 iframe 中同样可用（不涉及 Cookie）。
+
+### 登录（单租户）
+
+`/login` 是普通的邮箱 + 密码表单。服务端将输入与 `APP_LOGIN_EMAIL` / `APP_LOGIN_PASSWORD`
+比较，然后为该账号铸造 Supabase 会话，因此没有自助注册，也没有邮件频率限制。请在
+`.env.local`（以及部署平台的环境变量）中设置这两个变量，避免密码进入仓库；未设置时代码会
+回退到最初的硬编码值。白名单之外的新账号还会被数据库层的 `jp_restrict_signups` 拒绝
+（`npx supabase db push`）。
+
+会话存放在 `sessionStorage`，因此是**按标签页隔离**的：刷新和站内跳转保持登录，但关闭标签页
+（或在新标签页打开应用）会回到 `/login`，需要重新输入凭据。不使用会话 Cookie，这正是登录能在
+跨域 iframe 中工作的原因。
 
 ## 文档索引
 
@@ -57,6 +79,8 @@ cp .env.example .env.local
 | `BILLING_MODE` | `mock`（默认）或 `live` |
 | `EMAIL_MODE` | `mock`（默认）或 `live` |
 | `STRIPE_*` / `RESEND_*` | 仅在对应模式为 `live` 时需要 |
+| `APP_LOGIN_EMAIL` / `APP_LOGIN_PASSWORD` | 单租户登录凭据，由 `POST /api/auth/password-login` 校验 |
+| `NEXT_PUBLIC_DEMO_MODE` / `DEMO_EMAIL` | 可选的「Try the demo」演示登录按钮（默认关闭） |
 
 2. 安装依赖并应用数据库 Schema：
 
@@ -81,7 +105,8 @@ npx supabase db query --linked --file supabase/seed_companies.sql
 npm run dev
 ```
 
-打开 [http://localhost:5200](http://localhost:5200)。使用魔法链接登录。
+打开 [http://localhost:5200](http://localhost:5200)，使用 `.env.local` 中的
+`APP_LOGIN_EMAIL` / `APP_LOGIN_PASSWORD` 登录。
 
 ## 首次运行流程
 

@@ -56,7 +56,7 @@ shadcn            — shadcn/ui CLI for component scaffolding
 |---|---|---|
 | User data | Supabase Postgres (remote) | Managed via `npx supabase db push` — tables: `jp_users`, `jp_profiles`, `jp_companies`, `jp_postings`, `jp_scores`, `jp_applications`, `jp_interview_sessions`, `jp_usage_counters` |
 | File uploads | Supabase Storage bucket `jp_resumes` | Private, per-user folders |
-| Auth sessions | Supabase Auth | Magic-link only, PKCE flow, 1h token expiry |
+| Auth sessions | Supabase Auth | Fixed-credential password login mints a Supabase session; PKCE flow; stored in `sessionStorage` (per tab); 1h token expiry |
 
 ## Environment Quick Ref
 
@@ -79,6 +79,8 @@ cp .env.example .env.local
 | `STRIPE_WEBHOOK_SECRET` | Only needed when `BILLING_MODE=live` |
 | `RESEND_API_KEY` | Only needed when `EMAIL_MODE=live` |
 | `EMAIL_FROM` | Sender address for digests |
+| `APP_LOGIN_EMAIL` / `APP_LOGIN_PASSWORD` | Single-tenant credentials for `POST /api/auth/password-login` |
+| `NEXT_PUBLIC_DEMO_MODE` / `DEMO_EMAIL` | Optional "Try the demo" login button (off by default) |
 
 ## Runtime Setup
 
@@ -87,13 +89,13 @@ npm install
 cp .env.example .env.local   # then fill in values
 npx supabase db push          # apply migrations to linked project
 npx supabase db query --linked --file supabase/seed_companies.sql  # seed ATS companies
-npm run dev                   # → http://localhost:3000
+npm run dev                   # → http://localhost:5200
 ```
 
 ## CLI Commands
 
 ```bash
-npm run dev        # Next.js with Turbopack (port 3000)
+npm run dev        # Next.js with Turbopack (port 5200)
 npm test           # Vitest — all files in tests/unit/
 npm run build      # production build
 npm run lint       # ESLint
@@ -102,7 +104,7 @@ npm run lint       # ESLint
 npx supabase db push
 npx supabase db query --linked --file supabase/seed_companies.sql
 
-# Screenshot automation (requires dev server on port 3000)
+# Screenshot automation (requires dev server on port 5200)
 node --env-file=.env.local scripts/screenshot-with-auth.mjs
 ```
 

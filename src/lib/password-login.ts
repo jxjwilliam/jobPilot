@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/client";
 /**
  * Sign in with the fixed owner credentials. The server verifies them and mints
  * a session; storing it with `setSession` puts it in the same origin-scoped
- * localStorage used by the rest of the app, so it works inside iframes too.
+ * sessionStorage used by the rest of the app, so it works inside iframes too.
  */
 export async function passwordSignIn(
   email: string,

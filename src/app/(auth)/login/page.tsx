@@ -8,11 +8,11 @@ import { passwordSignIn } from "@/lib/password-login";
 import { JobPilotLogo } from "@/components/brand/JobPilotLogo";
 
 const demoEnabled = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
-const defaultEmail =
-  process.env.NEXT_PUBLIC_LOGIN_EMAIL ?? "jxjwilliam@gmail.com";
 
 function LoginForm() {
-  const [email, setEmail] = useState(defaultEmail);
+  // Nothing is prefilled or hinted: the credentials are never rendered, so
+  // every visit starts blank and has to be typed.
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [demoLoading, setDemoLoading] = useState(false);

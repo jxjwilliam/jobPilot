@@ -8,7 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * login. The email is created (confirmed, no email sent) if missing, then a
  * magic-link OTP is generated with the admin API and exchanged for a session
  * via /auth/v1/verify. The caller stores the session with `setSession()`, so it
- * lands in the same origin-scoped localStorage as a normal sign-in — which is
+ * lands in the same origin-scoped sessionStorage as a normal sign-in — which is
  * what makes the app work inside cross-origin iframes.
  */
 export async function mintSessionForEmail(

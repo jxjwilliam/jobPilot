@@ -5,7 +5,7 @@ import type { NextRequest } from "next/server";
 /**
  * Server auth for browser requests.
  *
- * Browser sessions live in localStorage (iframe-safe, see client.ts), so the
+ * Browser sessions live in sessionStorage (iframe-safe, see client.ts), so the
  * server never sees a session cookie. API routes resolve the user from the
  * `Authorization: Bearer <access_token>` header attached by apiFetch() and
  * run all .from() queries through a client bound to that JWT so RLS applies.

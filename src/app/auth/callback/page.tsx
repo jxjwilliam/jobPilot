@@ -16,7 +16,7 @@ function AuthCallback() {
     let cancelled = false;
 
     async function routeAfterSignIn() {
-      // The session was written to localStorage (shared with the parent
+      // The session was written to sessionStorage (shared with the parent
       // iframe's origin) — close the popup; the opener/iframe picks it up.
       if (window.opener) {
         window.close();

@@ -68,7 +68,7 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-  A[魔法链接登录] --> B[上传简历]
+  A[密码登录 (/login)] --> B[上传简历]
   B --> C[LLM 提取简历 + 推荐偏好]
   C --> D[用户审核自动填充的字段]
   D --> E[保存偏好]
@@ -87,25 +87,36 @@ flowchart TD
 
 ## 3. 时序图
 
-### 3.1 认证（魔法链接）
+### 3.1 认证（固定凭据密码登录）
 
 ```mermaid
 sequenceDiagram
   actor U as 用户
   participant FE as /login
+  participant API as POST /api/auth/password-login
+  participant MS as mintSessionForEmail()
   participant SB as Supabase Auth
-  participant CB as /auth/callback
 
-  U->>FE: 输入邮箱
-  FE->>SB: signInWithOtp(email)
-  SB-->>U: 魔法链接邮件
-  U->>CB: 打开链接 (?code=…)
-  CB->>SB: exchangeCodeForSession
-  CB->>SB: 加载 profile
-  alt 简历不完整
-    CB-->>U: 重定向 /onboarding
-  else 简历存在
-    CB-->>U: 重定向 /matches
+  U->>FE: 输入邮箱 + 密码
+  FE->>API: POST { email, password }
+  API->>API: 与 APP_LOGIN_EMAIL / APP_LOGIN_PASSWORD 做常量时间比较
+  alt 凭据错误或触发限流
+    API-->>FE: 401 / 429
+  else 凭据正确
+    API->>MS: 为白名单邮箱铸造会话
+    MS->>SB: admin.createUser（不存在时创建，不发邮件）
+    MS->>SB: admin.generateLink(magiclink) → email_otp
+    MS->>SB: POST /auth/v1/verify { email, token, type: magiclink }
+    SB-->>MS: Session（access + refresh token）
+    MS-->>API: Session
+    API-->>FE: { session }
+    FE->>SB: setSession(session) → sessionStorage（按标签页）
+    FE->>API: GET /api/profile（Authorization: Bearer …）
+    alt 简历不完整
+      FE-->>U: 重定向 /onboarding
+    else 简历存在
+      FE-->>U: 重定向 /matches
+    end
   end
 ```
 

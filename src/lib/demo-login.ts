@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/client";
 /**
  * Sign in as the demo user. The server mints a session (no email, no OTP
  * entry); storing it via setSession puts it in the same origin-scoped
- * localStorage used by magic-link sign-in, so it works inside iframes too.
+ * sessionStorage used by magic-link sign-in, so it works inside iframes too.
  */
 export async function demoSignIn(): Promise<void> {
   const res = await fetch("/api/demo/login", { method: "POST" });

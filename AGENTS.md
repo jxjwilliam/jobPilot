@@ -8,7 +8,7 @@ Next.js 15 App Router · Supabase (auth + Postgres + Storage) · Tailwind CSS v3
 
 ```bash
 npm run dev        # Next.js with Turbopack (port 5200)
-npm test           # Vitest — 39 tests across 9 files
+npm test           # Vitest — 60 tests across 11 files
 npm run build      # production build
 
 # Migrations (linked remote project)
@@ -34,29 +34,31 @@ Copy `.env.example` → `.env.local`. All required:
 | `CRON_SECRET` | random string for cron route auth |
 | `BILLING_MODE` | `mock` (default) or `live` |
 | `EMAIL_MODE` | `mock` (default) or `live` |
+| `APP_LOGIN_EMAIL` / `APP_LOGIN_PASSWORD` | single-tenant credentials for `POST /api/auth/password-login` |
+| `NEXT_PUBLIC_DEMO_MODE` / `DEMO_EMAIL` | optional "Try the demo" button (off by default) |
 
 Vercel deploy needs Vercel project linked; `.vercel/` is gitignored.
 
 ## Auth
 
-**Fixed-credential password login (single-tenant).** The login page (`src/app/(auth)/login/page.tsx`) posts email + password to `POST /api/auth/password-login`, which compares them (constant-time) against `APP_LOGIN_EMAIL` / `APP_LOGIN_PASSWORD` (code defaults: `jxjwilliam@gmail.com` / `William1!`). On a match the server mints a real Supabase session for that email via `mintSessionForEmail()` (`src/lib/auth/mint-session.ts`: admin `createUser` if missing → `generateLink` magiclink OTP → `POST /auth/v1/verify`) and the client stores it with `setSession`. Failed attempts are throttled (10 per IP per 5 min, per serverless instance). Self-serve signup is no longer offered, and `jp_restrict_signups` (`supabase/migrations/20260910000002_restrict_signups.sql`) rejects any new `auth.users` row outside the allowlist, because the anon key is public.
+**Fixed-credential password login (single-tenant).** The login page (`src/app/(auth)/login/page.tsx`) posts email + password to `POST /api/auth/password-login`, which compares them (constant-time) against `APP_LOGIN_EMAIL` / `APP_LOGIN_PASSWORD` (code defaults: `jxjwilliam@gmail.com` / `William1!`). Both fields start **blank** — nothing is prefilled, hinted, or shown in the UI. On a match the server mints a real Supabase session for that email via `mintSessionForEmail()` (`src/lib/auth/mint-session.ts`: admin `createUser` if missing → `generateLink` magiclink OTP → `POST /auth/v1/verify`) and the client stores it with `setSession`. Failed attempts are throttled (10 per IP per 5 min, per serverless instance). Self-serve signup is no longer offered, and `jp_restrict_signups` (`supabase/migrations/20260910000002_restrict_signups.sql`) rejects any new `auth.users` row outside the allowlist, because the anon key is public. CareerHub runs the identical gate (`careerhub/src/lib/auth/mint-session.ts`, `careerhub/src/app/api/auth/password-login/route.ts`) — keep the two copies in sync.
 
-**Iframe-safe sessions (localStorage, not cookies).** The browser client (`src/lib/supabase/client.ts`) is a plain `@supabase/supabase-js` client with `flowType: "pkce"` and `persistSession: true`, so sessions + PKCE verifiers live in **localStorage** — origin-scoped and not blocked in cross-origin iframes the way third-party cookies are. The server never sees a session cookie, so:
+**Iframe-safe, per-tab sessions (sessionStorage, not cookies).** The browser client (`src/lib/supabase/client.ts`) is a plain `@supabase/supabase-js` client with `flowType: "pkce"`, `persistSession: true` and an explicit `storage: window.sessionStorage`. That makes the session **per browser tab**: it survives reloads and in-app navigation, but it is dropped when the tab/window closes, so opening the app again lands on `/login` and the password has to be typed again. sessionStorage is origin-scoped and not blocked in cross-origin iframes the way third-party cookies are. The server never sees a session cookie, so:
 
 - **API routes** authenticate via `getSessionUser(request)` (`src/lib/supabase/server.ts`), which reads the `Authorization: Bearer <access_token>` header attached by `apiFetch()` (`src/lib/api.ts`). All user API calls go through `apiFetch()`.
 - **Route protection is client-side**: `(app)/layout.tsx` checks `supabase.auth.getSession()` and redirects to `/login?next={path}` when signed out. There is **no middleware**.
-- **Auth callback** (`/auth/callback`) is a client page that exchanges the PKCE code with `exchangeCodeForSession()`; the session lands in the same localStorage origin as the app (also closes OAuth popups). It is no longer part of the login flow (kept for OAuth/magic-link links already in the wild).
-- **Login in an iframe**: because the password form stores its session with `setSession` in localStorage, it works inside cross-origin iframes with no cookie/redirect dance.
+- **Auth callback** (`/auth/callback`) is a client page that exchanges the PKCE code with `exchangeCodeForSession()`; the session lands in the same sessionStorage origin as the app (also closes OAuth popups). It is no longer part of the login flow (kept for OAuth/magic-link links already in the wild).
+- **Login in an iframe**: because the password form stores its session with `setSession` in sessionStorage, it works inside cross-origin iframes with no cookie/redirect dance.
 - **Demo login (optional)**: when `NEXT_PUBLIC_DEMO_MODE=true` (currently `false`), the login/landing pages show a "Try the demo" button. `POST /api/demo/login` mints a session for `DEMO_EMAIL` (default `demo@jobpilot.local`) through the same `mintSessionForEmail()` helper. Leave it off when the app should be private.
 
 ### Playwright screenshot auth (the working approach)
 
-Do NOT navigate to the Supabase magic link URL. Instead, inject the session into localStorage directly:
+Do NOT navigate to the Supabase magic link URL. Instead, inject the session into sessionStorage directly:
 
 1. Call `supabase.auth.admin.generateLink({ type: "magiclink", email })` → get `email_otp`
 2. POST `{email, token: email_otp, type: "magiclink"}` to `{SUPABASE_URL}/auth/v1/verify` → get `access_token`, `refresh_token`, `user`
-3. Set localStorage `sb-{project_ref}-auth-token` = `JSON.stringify({access_token, refresh_token, expires_in, expires_at, token_type, user})`
-4. The browser client (`@supabase/supabase-js`) reads it from localStorage exactly like a real sign-in
+3. Set sessionStorage `sb-{project_ref}-auth-token` = `JSON.stringify({access_token, refresh_token, expires_in, expires_at, token_type, user})`
+4. The browser client (`@supabase/supabase-js`) reads it from sessionStorage exactly like a real sign-in
 
 See `scripts/screenshot-with-auth.mjs` for the full implementation.
 
@@ -71,8 +73,8 @@ Root `/` checks the session client-side: logged-in users redirect to `/onboardin
 ```
 src/app/
   page.tsx              # Landing page (redirects authed users)
-  (auth)/login/page.tsx # Magic link form
-  auth/callback/page.tsx # Client-side PKCE exchange (exchanges code, stores in localStorage)
+  (auth)/login/page.tsx # Password login form (fixed credentials)
+  auth/callback/page.tsx # Client-side PKCE exchange (exchanges code, stores in sessionStorage)
   (app)/                # Authenticated layout (+ AppNav)
     matches/page.tsx     # Scored jobs + streaming auto-score + tailor + interview buttons
     browse/page.tsx      # All active postings: search, filter, paginate
@@ -109,13 +111,13 @@ src/app/
 - **Mock:** `tests/mocks/server-only.ts` stubs `server-only` package (needed because Vitest runs outside Next.js)
 
 ```bash
-npm test                     # all tests (39 across 9 files)
+npm test                     # all tests (60 across 11 files)
 npx vitest run tests/unit/ingestion-normalize.test.ts   # single file
 ```
 
 `vitest.config.ts` aliases `@/` → `src/` and `server-only` → the mock file.
 
-9 test files covering: LLM schema parsing, resume parsing, scoring prompt, ingestion normalization (6 ATS sources), quota, digest, status machine, ranking, tailor guardrails.
+11 test files covering: LLM schema parsing, resume parsing, scoring prompt, ingestion normalization (6 ATS sources), posting fingerprinting, pipeline logic, quota, digest, status machine, ranking, tailor guardrails.
 
 ## Architecture
 
@@ -190,7 +192,7 @@ Uses `openai` SDK pointed at any OpenAI-compatible API (`OPENAI_COMPATIBLE_BASE_
 Script at `scripts/screenshot-with-auth.mjs`. Pipeline:
 1. Admin API → email OTP (no email sent)
 2. REST `/auth/v1/verify` → session tokens
-3. Inject `sb-{project_ref}-auth-token` into localStorage via Playwright
+3. Inject `sb-{project_ref}-auth-token` into sessionStorage via Playwright
 4. Verify login on `/matches` — if redirected to `/login`, abort
 5. Screenshot 7 routes: `/`, `/login`, `/matches`, `/applications`, `/profile`, `/onboarding`, `/usage`
 6. Inject markdown table into `README.md` + `README-zh.md` between `<!-- screenshots -->` markers

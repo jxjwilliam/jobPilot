@@ -33,9 +33,9 @@ JobPilot is an AI career-operations pipeline: upload a resume, get fields auto-f
 - `POST /api/demo/login` ensures the demo user exists (tolerating "already been registered" —
   fixed 2026-08: the tolerance regex previously didn't match Supabase's exact message), then
   mints a magic-link OTP with the admin API (no email sent) and exchanges it for a session.
-- The client stores the returned session via `supabase.auth.setSession`, i.e. **localStorage
-  PKCE** — the same origin-scoped store magic-link uses, so demo sign-in works inside the
-  dashboard iframe (no cookies involved).
+- The client stores the returned session via `supabase.auth.setSession`, i.e. **sessionStorage
+  PKCE** — the same origin-scoped store the password login uses, so demo sign-in works inside
+  the dashboard iframe (no cookies involved).
 
 ### Login (single-tenant)
 
@@ -46,6 +46,11 @@ Set both variables in `.env.local` (and in your host's env) to keep the password
 out of the repo; the code falls back to the original hardcoded pair when unset.
 New accounts outside the allowlist are also rejected at the database level by
 `jp_restrict_signups` (`npx supabase db push`).
+
+Sessions live in `sessionStorage`, so they are **per browser tab**: reloads and in-app
+navigation keep you signed in, but closing the tab (or opening the app in a new one) lands on
+`/login` and the credentials have to be typed again. There is no session cookie, which is what
+keeps login working inside cross-origin iframes.
 
 ## Docs map
 
@@ -81,6 +86,8 @@ cp .env.example .env.local
 | `BILLING_MODE` | `mock` (default) or `live` |
 | `EMAIL_MODE` | `mock` (default) or `live` |
 | `STRIPE_*` / `RESEND_*` | only when the matching mode is `live` |
+| `APP_LOGIN_EMAIL` / `APP_LOGIN_PASSWORD` | single-tenant credentials checked by `POST /api/auth/password-login` |
+| `NEXT_PUBLIC_DEMO_MODE` / `DEMO_EMAIL` | optional "Try the demo" button (off by default) |
 
 2. Install and apply schema:
 

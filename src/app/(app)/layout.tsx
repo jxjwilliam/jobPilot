@@ -18,7 +18,7 @@ export default function AppLayout({
     const supabase = createClient();
     let mounted = true;
 
-    // Sessions live in localStorage, which the server (middleware) can't see,
+    // Sessions live in sessionStorage, which the server (middleware) can't see,
     // so route protection happens client-side here. This also keeps the app
     // working inside cross-origin iframes where cookies are blocked.
     supabase.auth.getSession().then(({ data: { session } }) => {

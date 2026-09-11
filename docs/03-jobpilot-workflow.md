@@ -73,7 +73,7 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-  A[Magic-link login] --> B[Upload resume]
+  A[Password login (/login)] --> B[Upload resume]
   B --> C[LLM extracts profile + suggested preferences]
   C --> D[User reviews autofilled fields]
   D --> E[Save preferences]
@@ -92,25 +92,36 @@ flowchart TD
 
 ## 3. Sequence diagrams
 
-### 3.1 Auth (magic link)
+### 3.1 Auth (fixed-credential password login)
 
 ```mermaid
 sequenceDiagram
   actor U as User
   participant FE as /login
+  participant API as POST /api/auth/password-login
+  participant MS as mintSessionForEmail()
   participant SB as Supabase Auth
-  participant CB as /auth/callback
 
-  U->>FE: Enter email
-  FE->>SB: signInWithOtp(email)
-  SB-->>U: Magic link email
-  U->>CB: Open link (?code=…)
-  CB->>SB: exchangeCodeForSession
-  CB->>SB: Load profile
-  alt resume incomplete
-    CB-->>U: Redirect /onboarding
-  else resume present
-    CB-->>U: Redirect /matches
+  U->>FE: Enter email + password
+  FE->>API: POST { email, password }
+  API->>API: Constant-time compare vs APP_LOGIN_EMAIL / APP_LOGIN_PASSWORD
+  alt invalid or throttled
+    API-->>FE: 401 / 429
+  else valid
+    API->>MS: Mint session for the allowlisted email
+    MS->>SB: admin.createUser (if missing, no email)
+    MS->>SB: admin.generateLink(magiclink) → email_otp
+    MS->>SB: POST /auth/v1/verify { email, token, type: magiclink }
+    SB-->>MS: Session (access + refresh token)
+    MS-->>API: Session
+    API-->>FE: { session }
+    FE->>SB: setSession(session) → sessionStorage (per tab)
+    FE->>API: GET /api/profile (Authorization: Bearer …)
+    alt resume incomplete
+      FE-->>U: Redirect /onboarding
+    else resume present
+      FE-->>U: Redirect /matches
+    end
   end
 ```
 

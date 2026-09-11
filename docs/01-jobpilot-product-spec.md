@@ -9,7 +9,10 @@
 > Canada/remote-eligible location) stored as `jp_postings.is_relevant` / `matched_keywords`.
 > Matches and Browse default to **Greenhouse** with a Source dropdown. The original volume
 > assumptions below (500–2,000 companies, unfiltered ingest) are superseded — see
-> `docs/README.md` and the repo root `README.md`.
+> `docs/README.md` and the repo root `README.md`. Auth is now a single-tenant
+> **fixed-credential password gate** (`POST /api/auth/password-login`) that mints a Supabase
+> session into per-tab `sessionStorage`; self-serve magic-link signup is disabled and new
+> accounts outside the allowlist are rejected by `jp_restrict_signups`.
 
 **Owner:** [you]
 **Last updated:** July 11, 2026
